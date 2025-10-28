@@ -1,0 +1,125 @@
+# Zone 7: CreatureGRC Core (Minimal)
+# Purpose: GRC database and CLI - No web UI
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: grc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${GRC_DB_NAME:-grc_platform}
+      POSTGRES_USER: ${GRC_DB_USER:-grc_user}
+      POSTGRES_PASSWORD: ${GRC_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${GRC_DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GRC_DB_USER:-grc_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - grc-core
+
+  # CreatureGRC CLI Container (for running commands)
+  cli:
+    build:
+      context: ..
+      dockerfile: Dockerfile.cli
+    container_name: grc-cli
+    restart: "no"  # Only run on demand
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database
+      GRC_DB_HOST: postgres
+      GRC_DB_PORT: 5432
+      GRC_DB_NAME: ${GRC_DB_NAME:-grc_platform}
+      GRC_DB_USER: ${GRC_DB_USER:-grc_user}
+      GRC_DB_PASSWORD: ${GRC_DB_PASSWORD}
+
+      # Zone 2: Security & Monitoring
+      WAZUH_API_URL: ${WAZUH_API_URL}
+      WAZUH_USER: ${WAZUH_USER}
+      WAZUH_PASSWORD: ${WAZUH_PASSWORD}
+      TETRAGON_API_URL: ${TETRAGON_API_URL:-http://tetragon.example.com:2112}
+      NETBOX_API_URL: ${NETBOX_API_URL}
+      NETBOX_TOKEN: ${NETBOX_TOKEN}
+      GRAFANA_API_URL: ${GRAFANA_API_URL}
+      GRAFANA_TOKEN: ${GRAFANA_TOKEN}
+
+      # Zone 3: Secrets
+      INFISICAL_API_URL: ${INFISICAL_API_URL}
+      INFISICAL_TOKEN: ${INFISICAL_TOKEN}
+
+      # Zone 4: AI Agents
+      LITELLM_API_URL: ${LITELLM_API_URL:-http://litellm.example.com:4000}
+      LITELLM_API_KEY: ${LITELLM_API_KEY}
+      TEMPORAL_HOST: ${TEMPORAL_HOST:-temporal.example.com:7233}
+      OBOT_API_URL: ${OBOT_API_URL}
+      OBOT_TOKEN: ${OBOT_TOKEN}
+      LANGFUSE_API_URL: ${LANGFUSE_API_URL}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+
+      # Zone 5: Ticketing
+      JIRA_URL: ${JIRA_URL}
+      JIRA_EMAIL: ${JIRA_EMAIL}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN}
+      JIRA_PROJECT: ${JIRA_PROJECT:-COMPLIANCE}
+      CONFLUENCE_URL: ${CONFLUENCE_URL}
+      SMTP_HOST: ${SMTP_HOST:-smtp.office365.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+
+      # Zone 6: Identity
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-master}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-creaturegrc}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      FREEIPA_API_URL: ${FREEIPA_API_URL}
+      FREEIPA_USER: ${FREEIPA_USER}
+      FREEIPA_PASSWORD: ${FREEIPA_PASSWORD}
+
+      # Zone 1: Dev & Artifacts
+      ONEDEV_API_URL: ${ONEDEV_API_URL}
+      ONEDEV_TOKEN: ${ONEDEV_TOKEN}
+      ZOT_API_URL: ${ZOT_API_URL}
+      ZOT_USER: ${ZOT_USER}
+      ZOT_PASSWORD: ${ZOT_PASSWORD}
+
+      # LLM Configuration
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+
+    volumes:
+      - ../config:/app/config:ro
+      - evidence_data:/var/lib/grc/evidence
+      - audit_packages:/var/lib/grc/audit-packages
+    networks:
+      - grc-core
+    command: tail -f /dev/null  # Keep running for exec commands
+
+volumes:
+  postgres_data:
+    driver: local
+  evidence_data:
+    driver: local
+  audit_packages:
+    driver: local
+
+networks:
+  grc-core:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.27.0.0/16

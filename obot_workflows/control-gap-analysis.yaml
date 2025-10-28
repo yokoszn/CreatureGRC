@@ -1,0 +1,280 @@
+# Obot Workflow: Control Gap Analysis
+# Identify missing controls and generate remediation plan
+
+name: control-gap-analysis
+description: "Analyze control gaps and create remediation roadmap"
+
+trigger:
+  type: webhook
+  path: /api/workflows/gap-analysis
+  method: POST
+  auth: bearer_token
+
+input:
+  framework: "{{request.body.framework}}"  # e.g., "SOC2", "ISO27001"
+  target_date: "{{request.body.target_date}}"  # Target compliance date
+
+steps:
+  - name: get-required-controls
+    action: database.query
+    connection: grc_platform
+    query: |
+      SELECT
+        c.id,
+        c.control_code,
+        c.control_name,
+        c.control_description,
+        c.control_type,
+        c.is_key_control,
+        cd.domain_code,
+        cd.domain_name
+      FROM controls c
+      JOIN control_domains cd ON c.domain_id = cd.id
+      JOIN compliance_frameworks cf ON cd.framework_id = cf.id
+      WHERE cf.name = '{{input.framework}}'
+      ORDER BY cd.domain_code, c.control_code
+    output: required_controls
+
+  - name: get-implemented-controls
+    action: database.query
+    connection: grc_platform
+    query: |
+      SELECT
+        c.control_code,
+        ci.implementation_status,
+        ci.automation_level,
+        ci.last_test_date
+      FROM control_implementations ci
+      JOIN controls c ON ci.control_id = c.id
+      JOIN control_domains cd ON c.domain_id = cd.id
+      JOIN compliance_frameworks cf ON cd.framework_id = cf.id
+      WHERE cf.name = '{{input.framework}}'
+      AND ci.implementation_status IN ('implemented', 'partially_implemented')
+    output: implemented_controls
+
+  - name: calculate-gaps
+    action: array.diff
+    left: "{{required_controls | map: 'control_code'}}"
+    right: "{{implemented_controls | map: 'control_code'}}"
+    output: missing_control_codes
+
+  - name: get-gap-details
+    action: array.filter
+    source: "{{required_controls}}"
+    condition: "{{item.control_code in missing_control_codes}}"
+    output: gap_controls
+
+  - name: ai-prioritize-gaps
+    action: llm.analyze
+    model: claude-sonnet-4
+    prompt: |
+      Analyze these missing controls and prioritize them:
+
+      Framework: {{input.framework}}
+      Target Date: {{input.target_date}}
+      Missing Controls: {{gap_controls | length}}
+
+      Controls:
+      {{gap_controls | json}}
+
+      For each control, provide:
+      1. Priority (critical/high/medium/low) based on:
+         - Is it a key control?
+         - Control type (preventive > detective > corrective)
+         - Domain criticality
+         - Implementation complexity
+      2. Estimated implementation time (days)
+      3. Dependencies on other controls
+      4. Recommended implementation approach
+      5. Quick wins (controls that can be implemented quickly)
+
+      Return JSON array:
+      [
+        {
+          "control_code": "CC6.1",
+          "priority": "critical",
+          "estimated_days": 30,
+          "dependencies": ["CC1.2"],
+          "implementation_approach": "Deploy Keycloak with MFA",
+          "is_quick_win": false,
+          "rationale": "Key preventive control for authentication"
+        },
+        ...
+      ]
+    response_format: json
+    output: prioritized_gaps
+
+  - name: generate-remediation-roadmap
+    action: llm.generate
+    model: claude-sonnet-4
+    prompt: |
+      Create a detailed remediation roadmap to achieve {{input.framework}} compliance by {{input.target_date}}.
+
+      Gap Analysis:
+      - Total controls required: {{required_controls | length}}
+      - Implemented: {{implemented_controls | length}}
+      - Missing: {{gap_controls | length}}
+      - Gap percentage: {{(gap_controls | length) / (required_controls | length) * 100 | round: 1}}%
+
+      Prioritized Gaps:
+      {{prioritized_gaps | json}}
+
+      Generate a markdown roadmap with:
+      1. Executive Summary
+      2. Current State Assessment
+      3. Implementation Phases (group by priority and dependencies)
+      4. Week-by-week milestones
+      5. Resource requirements
+      6. Quick wins (implement first)
+      7. Critical path controls
+      8. Risk mitigation if target date is missed
+
+      Be specific and actionable.
+    output: remediation_roadmap
+
+  - name: calculate-timeline-feasibility
+    action: calculate
+    formula: "{{prioritized_gaps | map: 'estimated_days' | sum}}"
+    output: total_days_needed
+
+  - name: check-timeline-feasible
+    action: calculate-date-diff
+    from: "{{now}}"
+    to: "{{input.target_date}}"
+    unit: days
+    output: days_available
+
+  - name: feasibility-check
+    action: conditional
+    condition: "{{total_days_needed > days_available}}"
+    if_true:
+      - action: llm.generate
+        model: claude-sonnet-4
+        prompt: |
+          ALERT: Timeline may not be feasible.
+
+          Days needed: {{total_days_needed}}
+          Days available: {{days_available}}
+          Shortfall: {{total_days_needed - days_available}} days
+
+          Generate recommendations:
+          1. Which controls can be deprioritized?
+          2. Which controls can be parallelized?
+          3. Should target date be extended?
+          4. What additional resources would help?
+
+          Be realistic and specific.
+        output: feasibility_recommendations
+
+  - name: create-jira-epic
+    action: jira.create_issue
+    project: COMPLIANCE
+    issue_type: Epic
+    summary: "{{input.framework}} Compliance Gap Remediation"
+    description: |
+      {{remediation_roadmap}}
+
+      ## Timeline Feasibility
+      - Days Needed: {{total_days_needed}}
+      - Days Available: {{days_available}}
+      {{#if feasibility_recommendations}}
+      - ⚠️ Feasibility Concerns: See recommendations below
+
+      {{feasibility_recommendations}}
+      {{/if}}
+    labels: ["compliance", "{{input.framework | lowercase}}", "gap-remediation"]
+    output: epic
+
+  - name: create-control-tasks
+    action: foreach
+    items: "{{prioritized_gaps}}"
+    steps:
+      - name: create-jira-subtask
+        action: jira.create_issue
+        project: COMPLIANCE
+        issue_type: Task
+        parent: "{{epic.key}}"
+        summary: "Implement {{item.control_code}}: {{item.control_name}}"
+        description: |
+          **Control:** {{item.control_code}}
+          **Priority:** {{item.priority}}
+          **Estimated Time:** {{item.estimated_days}} days
+          **Implementation Approach:** {{item.implementation_approach}}
+
+          **Dependencies:**
+          {{#if item.dependencies}}
+          {{item.dependencies | join: ', '}}
+          {{else}}
+          None
+          {{/if}}
+
+          **Rationale:**
+          {{item.rationale}}
+        priority: "{{item.priority | titlecase}}"
+        labels: ["compliance", "{{input.framework | lowercase}}", "{{item.control_code}}"]
+        custom_fields:
+          estimated_days: "{{item.estimated_days}}"
+
+      # Store in database
+      - action: database.insert
+        connection: grc_platform
+        table: control_implementations
+        data:
+          control_id: "{{item.control_id}}"
+          implementation_status: "planned"
+          implementation_description: "{{item.implementation_approach}}"
+          automation_level: "manual"  # Will be updated during implementation
+          metadata:
+            priority: "{{item.priority}}"
+            estimated_days: "{{item.estimated_days}}"
+            jira_ticket: "{{jira_subtask.key}}"
+            gap_analysis_date: "{{now}}"
+
+  - name: send-summary-notification
+    action: slack.message
+    channel: "#compliance"
+    message: |
+      🎯 **{{input.framework}} Gap Analysis Complete**
+
+      **Current State:**
+      • Total Controls: {{required_controls | length}}
+      • Implemented: {{implemented_controls | length}}
+      • Missing: {{gap_controls | length}} ({{(gap_controls | length) / (required_controls | length) * 100 | round: 1}}%)
+
+      **Remediation Plan:**
+      • Critical Priority: {{prioritized_gaps | where: 'priority', 'critical' | length}}
+      • High Priority: {{prioritized_gaps | where: 'priority', 'high' | length}}
+      • Medium Priority: {{prioritized_gaps | where: 'priority', 'medium' | length}}
+      • Estimated Timeline: {{total_days_needed}} days
+      • Target Date: {{input.target_date}}
+      {{#if total_days_needed > days_available}}
+      • ⚠️ Timeline may be tight - see feasibility recommendations
+      {{/if}}
+
+      **Epic Created:** {{epic.key}}
+
+      View full roadmap: [Link to Jira Epic]
+
+  - name: store-roadmap-document
+    action: file.write
+    path: "/var/lib/grc/roadmaps/{{input.framework}}-gap-remediation-{{now | date: '%Y-%m-%d'}}.md"
+    content: |
+      # {{input.framework}} Gap Remediation Roadmap
+      Generated: {{now}}
+      Target Date: {{input.target_date}}
+
+      {{remediation_roadmap}}
+
+      ## Feasibility Analysis
+      {{#if feasibility_recommendations}}
+      {{feasibility_recommendations}}
+      {{else}}
+      Timeline appears feasible with focused execution.
+      {{/if}}
+
+output:
+  epic_key: "{{epic.key}}"
+  gap_count: "{{gap_controls | length}}"
+  estimated_days: "{{total_days_needed}}"
+  feasible: "{{total_days_needed <= days_available}}"
+  roadmap_path: "/var/lib/grc/roadmaps/{{input.framework}}-gap-remediation-{{now | date: '%Y-%m-%d'}}.md"

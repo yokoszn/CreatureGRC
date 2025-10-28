@@ -1,0 +1,214 @@
+# Obot Workflow: Quarterly Vendor Risk Assessment
+# Automatically assess vendor security posture
+
+name: vendor-risk-assessment
+description: "Quarterly security assessment of all active vendors"
+
+trigger:
+  type: schedule
+  cron: "0 0 1 */3 *"  # First day of every quarter at midnight
+
+steps:
+  - name: get-active-vendors
+    action: database.query
+    connection: grc_platform
+    query: |
+      SELECT
+        id,
+        vendor_name,
+        vendor_type,
+        criticality,
+        primary_contact_email,
+        has_soc2_report,
+        soc2_report_date,
+        has_iso27001_cert,
+        iso27001_cert_date,
+        last_security_review_date
+      FROM vendors
+      WHERE status = 'active'
+      ORDER BY criticality DESC
+    output: vendors
+
+  - name: notify-assessment-start
+    action: slack.message
+    channel: "#vendor-management"
+    message: |
+      🔍 Quarterly Vendor Risk Assessment Started
+      • Total vendors: {{vendors | length}}
+      • Critical vendors: {{vendors | where: 'criticality', 'critical' | length}}
+
+  - name: assess-each-vendor
+    action: foreach
+    items: "{{vendors}}"
+    steps:
+      # Check SOC 2 report validity
+      - name: check-soc2-status
+        action: conditional
+        condition: "{{item.has_soc2_report == true}}"
+        if_true:
+          - action: calculate-date-diff
+            from: "{{item.soc2_report_date}}"
+            to: "{{now}}"
+            unit: days
+            output: soc2_age_days
+
+          - action: conditional
+            condition: "{{soc2_age_days > 365}}"
+            if_true:
+              - action: database.insert
+                connection: grc_platform
+                table: audit_findings
+                data:
+                  finding_title: "{{item.vendor_name}} SOC 2 report expired"
+                  finding_description: "SOC 2 report is {{soc2_age_days}} days old (> 365 days)"
+                  severity: "high"
+                  status: "open"
+                  identified_date: "{{now | date: '%Y-%m-%d'}}"
+                  remediation_plan: "Request updated SOC 2 report from vendor"
+
+      # Use AI to search for vendor security page
+      - name: find-vendor-security-info
+        action: llm.web_search
+        model: claude-sonnet-4
+        query: "{{item.vendor_name}} security compliance SOC2 ISO27001 certifications"
+        instructions: |
+          Find the vendor's security/compliance page and extract:
+          1. Current SOC 2 status
+          2. ISO 27001 certification status
+          3. Any security certifications mentioned
+          4. Last update date on their security page
+
+          Return JSON:
+          {
+            "security_page_url": "...",
+            "soc2_mentioned": true/false,
+            "iso27001_mentioned": true/false,
+            "other_certifications": [],
+            "last_updated": "2025-01-01",
+            "confidence": 85
+          }
+        response_format: json
+        output: web_findings
+
+      # Generate risk score with AI
+      - name: calculate-vendor-risk
+        action: llm.analyze
+        model: claude-sonnet-4
+        prompt: |
+          Assess the security risk of this vendor:
+
+          Vendor: {{item.vendor_name}}
+          Type: {{item.vendor_type}}
+          Criticality: {{item.criticality}}
+          Has SOC 2: {{item.has_soc2_report}}
+          SOC 2 Date: {{item.soc2_report_date}}
+          Has ISO 27001: {{item.has_iso27001_cert}}
+          Last Review: {{item.last_security_review_date}}
+          Web Findings: {{web_findings}}
+
+          Provide:
+          1. Risk score (0-100, where 100 is highest risk)
+          2. Key risk factors
+          3. Recommended actions
+          4. Next review date
+
+          Return JSON:
+          {
+            "risk_score": 45,
+            "risk_level": "medium",
+            "risk_factors": ["Expired SOC 2", "No recent review"],
+            "recommended_actions": ["Request new SOC 2", "Schedule review call"],
+            "next_review_date": "2025-06-01"
+          }
+        response_format: json
+        output: risk_assessment
+
+      # Update vendor record
+      - name: update-vendor-risk
+        action: database.update
+        connection: grc_platform
+        table: vendors
+        where: "id = '{{item.id}}'"
+        data:
+          last_security_review_date: "{{now | date: '%Y-%m-%d'}}"
+          next_security_review_date: "{{risk_assessment.next_review_date}}"
+          metadata:
+            risk_score: "{{risk_assessment.risk_score}}"
+            risk_level: "{{risk_assessment.risk_level}}"
+            assessment_date: "{{now}}"
+
+      # Create Jira ticket for high-risk vendors
+      - name: create-remediation-tasks
+        action: conditional
+        condition: "{{risk_assessment.risk_score >= 70}}"
+        if_true:
+          - action: jira.create_issue
+            project: COMPLIANCE
+            issue_type: Task
+            summary: "HIGH RISK: Review vendor {{item.vendor_name}}"
+            description: |
+              Vendor Risk Assessment Results:
+
+              **Vendor:** {{item.vendor_name}}
+              **Risk Score:** {{risk_assessment.risk_score}}/100
+              **Risk Level:** {{risk_assessment.risk_level}}
+
+              **Risk Factors:**
+              {{risk_assessment.risk_factors | join: '\n- '}}
+
+              **Recommended Actions:**
+              {{risk_assessment.recommended_actions | join: '\n- '}}
+
+              **Contact:** {{item.primary_contact_email}}
+
+            priority: High
+            labels: ["vendor-risk", "compliance", "{{risk_assessment.risk_level}}"]
+            assignee: auto
+
+          - action: send-email
+            to: "{{item.primary_contact_email}}"
+            subject: "Security Assessment Request - {{item.vendor_name}}"
+            body: |
+              Hello,
+
+              As part of our quarterly vendor security review, we would like to request
+              updated security documentation for {{item.vendor_name}}.
+
+              Specifically, we need:
+              {{risk_assessment.recommended_actions | join: '\n- '}}
+
+              Please provide these by {{risk_assessment.next_review_date}}.
+
+              Thank you,
+              Compliance Team
+
+  # Generate summary report
+  - name: generate-summary-report
+    action: llm.generate
+    model: claude-sonnet-4
+    prompt: |
+      Generate an executive summary of this vendor risk assessment:
+
+      Total Vendors Assessed: {{vendors | length}}
+
+      Create a markdown report with:
+      1. Executive Summary
+      2. High-risk vendors table
+      3. Actions required
+      4. Trends vs last quarter
+
+      Be concise and actionable.
+    output: summary_report
+
+  - name: send-summary-to-leadership
+    action: slack.message
+    channel: "#leadership"
+    message: |
+      📊 Quarterly Vendor Risk Assessment Complete
+
+      {{summary_report}}
+
+  - name: store-report
+    action: file.write
+    path: "/var/lib/grc/reports/vendor-risk-{{now | date: '%Y-%m-%d'}}.md"
+    content: "{{summary_report}}"

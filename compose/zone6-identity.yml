@@ -1,0 +1,146 @@
+# Zone 6: Identity & Authentication
+# Complete identity management stack
+# Keycloak (SSO) + FreeIPA (LDAP + CA)
+# Can be deployed standalone or as part of megamonolith
+
+version: '3.8'
+
+services:
+  # Keycloak - Identity Provider (SSO/OIDC/SAML)
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    restart: unless-stopped
+    ports:
+      - "${KEYCLOAK_HTTP_PORT:-8080}:8080"
+      - "${KEYCLOAK_HTTPS_PORT:-8443}:8443"
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:-auth.example.com}
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+      KC_PROXY: edge
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    command:
+      - start
+      - --optimized
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    networks:
+      - zone6
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  keycloak-db:
+    image: postgres:16-alpine
+    container_name: keycloak-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    networks:
+      - zone6
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FreeIPA Server - LDAP + Certificate Authority
+  freeipa:
+    image: freeipa/freeipa-server:latest
+    container_name: freeipa
+    restart: unless-stopped
+    hostname: ${FREEIPA_HOSTNAME:-ipa.example.com}
+    ports:
+      - "${FREEIPA_HTTP_PORT:-80}:80"
+      - "${FREEIPA_HTTPS_PORT:-443}:443"
+      - "${FREEIPA_LDAP_PORT:-389}:389"
+      - "${FREEIPA_LDAPS_PORT:-636}:636"
+      - "${FREEIPA_KERBEROS_PORT:-88}:88"
+      - "${FREEIPA_KERBEROS_UDP_PORT:-88}:88/udp"
+      - "${FREEIPA_KPASSWD_PORT:-464}:464"
+      - "${FREEIPA_KPASSWD_UDP_PORT:-464}:464/udp"
+      - "${FREEIPA_DNS_PORT:-53}:53"
+      - "${FREEIPA_DNS_UDP_PORT:-53}:53/udp"
+    environment:
+      IPA_SERVER_HOSTNAME: ${FREEIPA_HOSTNAME:-ipa.example.com}
+      IPA_SERVER_INSTALL_OPTS: >-
+        --realm=${FREEIPA_REALM:-EXAMPLE.COM}
+        --domain=${FREEIPA_DOMAIN:-example.com}
+        --ds-password=${FREEIPA_DS_PASSWORD}
+        --admin-password=${FREEIPA_ADMIN_PASSWORD}
+        --no-ntp
+        --unattended
+        --setup-dns
+        --forwarder=8.8.8.8
+        --forwarder=1.1.1.1
+    volumes:
+      - freeipa_data:/data
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    tmpfs:
+      - /run
+      - /tmp
+    security_opt:
+      - seccomp:unconfined
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv6.conf.lo.disable_ipv6=0
+    cap_add:
+      - SYS_TIME
+      - NET_ADMIN
+    networks:
+      zone6:
+        ipv4_address: 172.26.0.10
+    healthcheck:
+      test: ["CMD", "curl", "-f", "https://localhost/ipa/ui"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+
+  # FreeIPA LDAP Browser (optional admin UI)
+  ldap-account-manager:
+    image: ldapaccountmanager/lam:latest
+    container_name: ldap-account-manager
+    restart: unless-stopped
+    ports:
+      - "${LAM_PORT:-8082}:80"
+    environment:
+      LAM_LANG: en_US
+      LAM_PASSWORD: ${LAM_PASSWORD}
+      LDAP_SERVER: ldap://freeipa:389
+      LDAP_BASE_DN: ${FREEIPA_BASE_DN:-dc=example,dc=com}
+    depends_on:
+      - freeipa
+    networks:
+      - zone6
+
+volumes:
+  keycloak_data:
+    driver: local
+  keycloak_db_data:
+    driver: local
+  freeipa_data:
+    driver: local
+
+networks:
+  zone6:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.26.0.0/16
