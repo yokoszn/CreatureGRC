@@ -1,7 +1,5 @@
-# Zone 4: AI Agent Stack
-# Complete AI orchestration platform
-# Compatible with CrewAI, LangChain, LlamaIndex (framework-agnostic)
-# Can be deployed standalone or as part of megamonolith
+# AI Foundry - Separate Stack
+# Deploy in separate LXC, connected to GRC Core via API
 
 version: '3.8'
 
@@ -24,9 +22,7 @@ services:
       temporal-db:
         condition: service_healthy
     networks:
-      - zone4
-    volumes:
-      - temporal_config:/etc/temporal
+      - ai-foundry
 
   temporal-db:
     image: postgres:16-alpine
@@ -39,14 +35,14 @@ services:
     volumes:
       - temporal_db_data:/var/lib/postgresql/data
     networks:
-      - zone4
+      - ai-foundry
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U temporal"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Temporal UI
+  # Temporal UI (optional)
   temporal-ui:
     image: temporalio/ui:latest
     container_name: temporal-ui
@@ -55,11 +51,10 @@ services:
       - "${TEMPORAL_UI_PORT:-8080}:8080"
     environment:
       - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
     depends_on:
       - temporal
     networks:
-      - zone4
+      - ai-foundry
 
   # LiteLLM - Multi-LLM Gateway
   litellm:
@@ -78,13 +73,12 @@ services:
       - DATABASE_URL=postgresql://litellm:${LITELLM_DB_PASSWORD}@litellm-db:5432/litellm
     volumes:
       - ./litellm-config.yaml:/app/config.yaml:ro
-      - litellm_logs:/app/logs
     command: --config /app/config.yaml --port 4000 --num_workers 4
     depends_on:
       litellm-db:
         condition: service_healthy
     networks:
-      - zone4
+      - ai-foundry
 
   litellm-db:
     image: postgres:16-alpine
@@ -97,7 +91,7 @@ services:
     volumes:
       - litellm_db_data:/var/lib/postgresql/data
     networks:
-      - zone4
+      - ai-foundry
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U litellm"]
       interval: 10s
@@ -117,7 +111,7 @@ services:
       - LITELLM_API_KEY=${LITELLM_MASTER_KEY}
       - OBOT_SECRET_KEY=${OBOT_SECRET_KEY}
     volumes:
-      - ../obot_workflows:/app/workflows:ro
+      - ./obot_workflows:/app/workflows:ro
       - obot_data:/app/data
     depends_on:
       obot-db:
@@ -125,7 +119,7 @@ services:
       litellm:
         condition: service_started
     networks:
-      - zone4
+      - ai-foundry
 
   obot-db:
     image: postgres:16-alpine
@@ -138,7 +132,7 @@ services:
     volumes:
       - obot_db_data:/var/lib/postgresql/data
     networks:
-      - zone4
+      - ai-foundry
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U obot"]
       interval: 10s
@@ -164,7 +158,7 @@ services:
       litellm:
         condition: service_started
     networks:
-      - zone4
+      - ai-foundry
 
   gooseai-db:
     image: postgres:16-alpine
@@ -177,7 +171,7 @@ services:
     volumes:
       - gooseai_db_data:/var/lib/postgresql/data
     networks:
-      - zone4
+      - ai-foundry
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gooseai"]
       interval: 10s
@@ -203,7 +197,7 @@ services:
       langfuse-db:
         condition: service_healthy
     networks:
-      - zone4
+      - ai-foundry
 
   langfuse-db:
     image: postgres:16-alpine
@@ -216,7 +210,7 @@ services:
     volumes:
       - langfuse_db_data:/var/lib/postgresql/data
     networks:
-      - zone4
+      - ai-foundry
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U langfuse"]
       interval: 10s
@@ -234,12 +228,10 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - zone4
+      - ai-foundry
 
 volumes:
-  temporal_config:
   temporal_db_data:
-  litellm_logs:
   litellm_db_data:
   obot_data:
   obot_db_data:
@@ -249,8 +241,5 @@ volumes:
   redis_data:
 
 networks:
-  zone4:
+  ai-foundry:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.24.0.0/16

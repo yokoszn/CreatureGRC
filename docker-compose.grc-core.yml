@@ -1,21 +1,21 @@
-# Zone 7: CreatureGRC Core (Minimal)
-# Purpose: GRC database and CLI - No web UI
+# CreatureGRC Core - Minimal (Just Database + CLI)
+# No bundled services - connects to existing LXCs via API
 
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database (only service we bundle)
   postgres:
     image: postgres:16-alpine
     container_name: grc-postgres
     restart: unless-stopped
+    ports:
+      - "${GRC_DB_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${GRC_DB_NAME:-grc_platform}
       POSTGRES_USER: ${GRC_DB_USER:-grc_user}
       POSTGRES_PASSWORD: ${GRC_DB_PASSWORD}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-    ports:
-      - "${GRC_DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
@@ -25,88 +25,95 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - grc-core
+      - grc
 
-  # CreatureGRC CLI Container (for running commands)
+  # CreatureGRC CLI Container
   cli:
     build:
       context: ..
       dockerfile: Dockerfile.cli
     container_name: grc-cli
-    restart: "no"  # Only run on demand
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      # Database
+      # Local database connection
       GRC_DB_HOST: postgres
       GRC_DB_PORT: 5432
       GRC_DB_NAME: ${GRC_DB_NAME:-grc_platform}
       GRC_DB_USER: ${GRC_DB_USER:-grc_user}
       GRC_DB_PASSWORD: ${GRC_DB_PASSWORD}
 
-      # Zone 2: Security & Monitoring
+      # =============================================
+      # External LXC Connections (IP/API)
+      # =============================================
+
+      # Wazuh (existing LXC)
       WAZUH_API_URL: ${WAZUH_API_URL}
       WAZUH_USER: ${WAZUH_USER}
       WAZUH_PASSWORD: ${WAZUH_PASSWORD}
-      TETRAGON_API_URL: ${TETRAGON_API_URL:-http://tetragon.example.com:2112}
+
+      # Netbox (existing LXC)
       NETBOX_API_URL: ${NETBOX_API_URL}
       NETBOX_TOKEN: ${NETBOX_TOKEN}
-      GRAFANA_API_URL: ${GRAFANA_API_URL}
-      GRAFANA_TOKEN: ${GRAFANA_TOKEN}
 
-      # Zone 3: Secrets
-      INFISICAL_API_URL: ${INFISICAL_API_URL}
-      INFISICAL_TOKEN: ${INFISICAL_TOKEN}
-
-      # Zone 4: AI Agents
-      LITELLM_API_URL: ${LITELLM_API_URL:-http://litellm.example.com:4000}
-      LITELLM_API_KEY: ${LITELLM_API_KEY}
-      TEMPORAL_HOST: ${TEMPORAL_HOST:-temporal.example.com:7233}
-      OBOT_API_URL: ${OBOT_API_URL}
-      OBOT_TOKEN: ${OBOT_TOKEN}
-      LANGFUSE_API_URL: ${LANGFUSE_API_URL}
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
-
-      # Zone 5: Ticketing
-      JIRA_URL: ${JIRA_URL}
-      JIRA_EMAIL: ${JIRA_EMAIL}
-      JIRA_API_TOKEN: ${JIRA_API_TOKEN}
-      JIRA_PROJECT: ${JIRA_PROJECT:-COMPLIANCE}
-      CONFLUENCE_URL: ${CONFLUENCE_URL}
-      SMTP_HOST: ${SMTP_HOST:-smtp.office365.com}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-
-      # Zone 6: Identity
+      # Keycloak (existing LXC)
       KEYCLOAK_URL: ${KEYCLOAK_URL}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-master}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-creaturegrc}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+
+      # FreeIPA (existing LXC)
       FREEIPA_API_URL: ${FREEIPA_API_URL}
       FREEIPA_USER: ${FREEIPA_USER}
       FREEIPA_PASSWORD: ${FREEIPA_PASSWORD}
 
-      # Zone 1: Dev & Artifacts
+      # Infisical (existing LXC)
+      INFISICAL_API_URL: ${INFISICAL_API_URL}
+      INFISICAL_TOKEN: ${INFISICAL_TOKEN}
+
+      # Vaultwarden (existing LXC)
+      VAULTWARDEN_API_URL: ${VAULTWARDEN_API_URL}
+      VAULTWARDEN_TOKEN: ${VAULTWARDEN_TOKEN}
+
+      # OneDev (existing LXC)
       ONEDEV_API_URL: ${ONEDEV_API_URL}
       ONEDEV_TOKEN: ${ONEDEV_TOKEN}
+
+      # Zot Registry (existing LXC)
       ZOT_API_URL: ${ZOT_API_URL}
       ZOT_USER: ${ZOT_USER}
       ZOT_PASSWORD: ${ZOT_PASSWORD}
 
-      # LLM Configuration
+      # AI Foundry (separate LXC)
+      LITELLM_API_URL: ${LITELLM_API_URL}
+      TEMPORAL_HOST: ${TEMPORAL_HOST}
+      OBOT_API_URL: ${OBOT_API_URL}
+      LANGFUSE_API_URL: ${LANGFUSE_API_URL}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+
+      # LLM API Keys (for direct calls if LiteLLM unavailable)
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+
+      # Ticketing (external - Jira/M365)
+      JIRA_URL: ${JIRA_URL}
+      JIRA_EMAIL: ${JIRA_EMAIL}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN}
+      SMTP_HOST: ${SMTP_HOST:-smtp.office365.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
 
     volumes:
       - ../config:/app/config:ro
       - evidence_data:/var/lib/grc/evidence
       - audit_packages:/var/lib/grc/audit-packages
     networks:
-      - grc-core
+      - grc
     command: tail -f /dev/null  # Keep running for exec commands
 
 volumes:
@@ -118,8 +125,5 @@ volumes:
     driver: local
 
 networks:
-  grc-core:
+  grc:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.27.0.0/16
