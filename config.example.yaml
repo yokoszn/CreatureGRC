@@ -1,0 +1,114 @@
+# CreatureGRC Platform Configuration
+
+# Database Configuration
+database:
+  host: localhost
+  port: 5432
+  database: grc_platform
+  user: grc_user
+  password: ${DB_PASSWORD}  # Set via environment variable
+
+# LiteLLM Multi-LLM Configuration
+llm:
+  primary_model: "claude-sonnet-4-20250514"
+  fallback_models:
+    - "gpt-4-turbo"
+    - "gemini-1.5-pro"
+
+  api_keys:
+    # Set via environment variables
+    anthropic: ${ANTHROPIC_API_KEY}
+    openai: ${OPENAI_API_KEY}
+    google: ${GOOGLE_API_KEY}
+
+  cost_limits:
+    daily_max_usd: 100
+    per_request_max_tokens: 4000
+
+  timeout_seconds: 60
+  debug: false
+
+# Evidence Collection Configuration
+evidence:
+  output_dir: /var/lib/grc/evidence
+
+  # Collection schedule (cron format)
+  schedule:
+    daily: "0 2 * * *"      # 2 AM daily
+    weekly: "0 3 * * 0"     # 3 AM Sunday
+    monthly: "0 4 1 * *"    # 4 AM first of month
+
+# Wazuh Configuration
+wazuh:
+  api_url: https://wazuh-manager:55000
+  user: wazuh-admin
+  password: ${WAZUH_PASSWORD}
+  verify_ssl: false  # Set to true in production with valid cert
+
+# Keycloak Configuration
+keycloak:
+  url: https://keycloak.example.com
+  realm: master
+  client_id: grc-platform
+  client_secret: ${KEYCLOAK_CLIENT_SECRET}
+
+# OpenSCAP Configuration
+openscap:
+  profile: xccdf_org.ssgproject.content_profile_cis
+  datastream: /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml
+
+# GitHub Configuration
+github:
+  organization: your-org
+  token: ${GITHUB_TOKEN}
+
+# Temporal.io Configuration
+temporal:
+  host: localhost:7233
+  namespace: default
+  task_queue: grc-compliance
+
+# Obot Configuration
+obot:
+  url: http://localhost:9000
+  workflows_dir: ./obot_workflows
+
+# Audit Packages
+audit_packages:
+  output_dir: /var/lib/grc/audit-packages
+
+# Notifications
+notifications:
+  slack:
+    webhook_url: ${SLACK_WEBHOOK_URL}
+    channels:
+      compliance: "#compliance"
+      alerts: "#compliance-alerts"
+      leadership: "#leadership"
+
+  email:
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    smtp_user: ${SMTP_USER}
+    smtp_password: ${SMTP_PASSWORD}
+    from_address: compliance@example.com
+
+# Jira Integration (for Obot workflows)
+jira:
+  url: https://your-org.atlassian.net
+  email: ${JIRA_EMAIL}
+  api_token: ${JIRA_API_TOKEN}
+  project: COMPLIANCE
+
+# Trust Center (optional)
+trust_center:
+  enabled: true
+  public_url: https://compliance.example.com
+  contact_email: compliance@example.com
+
+# Feature Flags
+features:
+  ai_questionnaire: true
+  auto_evidence_collection: true
+  continuous_monitoring: true
+  vendor_risk_automation: true

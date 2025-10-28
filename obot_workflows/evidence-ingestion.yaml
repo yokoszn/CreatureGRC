@@ -1,0 +1,148 @@
+# Obot Workflow: Evidence Ingestion Pipeline
+# Automatically processes new evidence files and links them to controls
+
+name: evidence-ingestion-pipeline
+description: "Automatically detect, classify, and store new evidence files"
+
+trigger:
+  type: file_watch
+  path: /var/lib/grc/evidence/incoming
+  pattern: "*.{json,xml,html,pdf}"
+
+steps:
+  - name: read-file
+    action: file.read
+    path: "{{trigger.file_path}}"
+    output: raw_evidence
+
+  - name: calculate-hash
+    action: crypto.sha256
+    input: "{{raw_evidence}}"
+    output: file_hash
+
+  - name: classify-evidence-with-ai
+    action: llm.classify
+    model: claude-sonnet-4
+    prompt: |
+      Analyze this evidence file and classify it:
+
+      Filename: {{trigger.file_name}}
+      Content preview: {{raw_evidence | truncate: 500}}
+
+      Please provide:
+      1. Evidence type (log_export, configuration_file, screenshot, policy_document, test_result, attestation)
+      2. Source system (wazuh, keycloak, openscap, github, confluence, manual)
+      3. Which SOC 2 control domains does this evidence support? (CC1-CC9)
+      4. Date range covered (if applicable)
+      5. Confidence score (0-100) on this classification
+
+      Return ONLY valid JSON:
+      {
+        "evidence_type": "...",
+        "source_system": "...",
+        "control_domains": ["CC6", "CC7"],
+        "period_start": "2025-01-01",
+        "period_end": "2025-03-31",
+        "confidence": 95,
+        "suggested_name": "Descriptive evidence name"
+      }
+    temperature: 0.3
+    response_format: json
+    output: classification
+
+  - name: validate-classification
+    action: conditional
+    condition: "{{classification.confidence >= 70}}"
+    if_true:
+      - name: store-in-database
+        action: database.insert
+        connection: grc_platform
+        table: evidence
+        data:
+          evidence_name: "{{classification.suggested_name}}"
+          evidence_type: "{{classification.evidence_type}}"
+          source_system: "{{classification.source_system}}"
+          file_path: "{{trigger.file_path}}"
+          file_hash: "{{file_hash}}"
+          collection_timestamp: "{{now}}"
+          evidence_period_start: "{{classification.period_start}}"
+          evidence_period_end: "{{classification.period_end}}"
+          collection_method: "automated"
+          review_status: "pending"
+          metadata:
+            ai_confidence: "{{classification.confidence}}"
+            original_filename: "{{trigger.file_name}}"
+
+      - name: link-to-controls
+        action: foreach
+        items: "{{classification.control_domains}}"
+        steps:
+          - action: database.query
+            connection: grc_platform
+            query: |
+              SELECT ci.id
+              FROM control_implementations ci
+              JOIN controls c ON ci.control_id = c.id
+              JOIN control_domains cd ON c.domain_id = cd.id
+              WHERE cd.domain_code = '{{item}}'
+              AND ci.implementation_status = 'implemented'
+              LIMIT 1
+            output: control_impl
+
+          - action: database.update
+            connection: grc_platform
+            table: evidence
+            where: "file_hash = '{{file_hash}}'"
+            data:
+              control_implementation_id: "{{control_impl.id}}"
+
+      - name: notify-compliance-team
+        action: slack.message
+        channel: "#compliance"
+        message: |
+          📄 New evidence collected and classified:
+          • Name: {{classification.suggested_name}}
+          • Type: {{classification.evidence_type}}
+          • Source: {{classification.source_system}}
+          • Controls: {{classification.control_domains | join: ', '}}
+          • Confidence: {{classification.confidence}}%
+
+    if_false:
+      - name: flag-for-manual-review
+        action: database.insert
+        connection: grc_platform
+        table: evidence
+        data:
+          evidence_name: "NEEDS REVIEW: {{trigger.file_name}}"
+          evidence_type: "unknown"
+          file_path: "{{trigger.file_path}}"
+          file_hash: "{{file_hash}}"
+          collection_timestamp: "{{now}}"
+          collection_method: "automated"
+          review_status: "needs_clarification"
+          metadata:
+            ai_confidence: "{{classification.confidence}}"
+            reason: "Low confidence classification"
+
+      - name: notify-low-confidence
+        action: slack.message
+        channel: "#compliance"
+        message: |
+          ⚠️ Evidence requires manual review (low AI confidence):
+          • File: {{trigger.file_name}}
+          • Confidence: {{classification.confidence}}%
+          • Path: {{trigger.file_path}}
+
+error_handling:
+  on_error:
+    - action: slack.message
+      channel: "#compliance-alerts"
+      message: |
+        ❌ Evidence ingestion failed:
+        • File: {{trigger.file_name}}
+        • Error: {{error.message}}
+        • Step: {{error.step}}
+
+    - action: file.move
+      from: "{{trigger.file_path}}"
+      to: "/var/lib/grc/evidence/failed/{{trigger.file_name}}"
