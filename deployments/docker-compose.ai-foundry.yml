@@ -72,7 +72,7 @@ services:
       - LITELLM_LOG=INFO
       - DATABASE_URL=postgresql://litellm:${LITELLM_DB_PASSWORD}@litellm-db:5432/litellm
     volumes:
-      - ./litellm-config.yaml:/app/config.yaml:ro
+      - ../config/litellm-config.yaml:/app/config.yaml:ro
     command: --config /app/config.yaml --port 4000 --num_workers 4
     depends_on:
       litellm-db:
@@ -111,7 +111,7 @@ services:
       - LITELLM_API_KEY=${LITELLM_MASTER_KEY}
       - OBOT_SECRET_KEY=${OBOT_SECRET_KEY}
     volumes:
-      - ./obot_workflows:/app/workflows:ro
+      - ../workflows/obot:/app/workflows:ro
       - obot_data:/app/data
     depends_on:
       obot-db:

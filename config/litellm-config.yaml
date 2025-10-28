@@ -1,0 +1,51 @@
+# LiteLLM Configuration for CreatureGRC AI Foundry
+# Multi-LLM Gateway with automatic fallback and cost tracking
+
+model_list:
+  # Primary Models
+  - model_name: gpt-4
+    litellm_params:
+      model: gpt-4
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: gemini-pro
+    litellm_params:
+      model: gemini-pro
+      api_key: os.environ/GOOGLE_API_KEY
+
+  # Cost-effective alternatives
+  - model_name: gpt-3.5-turbo
+    litellm_params:
+      model: gpt-3.5-turbo
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: claude-3-haiku
+    litellm_params:
+      model: claude-3-haiku-20240307
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+# Router Settings
+router_settings:
+  routing_strategy: simple-shuffle  # Load balance across models
+  num_retries: 2
+  timeout: 600  # 10 minutes for long-running tasks
+  fallbacks:
+    - ["gpt-4", "claude-3-5-sonnet"]
+    - ["claude-3-5-sonnet", "gpt-4"]
+    - ["gpt-3.5-turbo", "claude-3-haiku"]
+
+# Budget Controls
+litellm_settings:
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  max_budget: 100.0  # $100/day default
+  budget_duration: 1d
+
+# Observability
+callbacks:
+  - langfuse
