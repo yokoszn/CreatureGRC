@@ -1,0 +1,210 @@
+                                                                                                   
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                            GRC PLATFORM ARCHITECTURE                                         │
+│                      Extending Creature Database for Compliance                              │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   DATA LAYER (PostgreSQL)                                    │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│   ┌────────────────────┐        ┌─────────────────────┐        ┌──────────────────────┐   │
+│   │  Creature Database │───────▶│   GRC Extension     │───────▶│  Risk & Compliance   │   │
+│   │                    │        │                     │        │                      │   │
+│   │ • creatures        │        │ • assets            │        │ • risks              │   │
+│   │ • dependencies     │        │ • policies          │        │ • control_frameworks │   │
+│   │ • sovereignty      │        │ • controls          │        │ • audit_findings     │   │
+│   │ • kill_switches    │        │ • evidence          │        │ • questionnaires     │   │
+│   └────────────────────┘        └─────────────────────┘        └──────────────────────┘   │
+│                                                                                              │
+│   Views: v_compliance_coverage, v_risk_register, v_audit_readiness                         │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+                                              │
+                                              ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              EVIDENCE COLLECTION LAYER                                       │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐           │
+│   │   Wazuh      │    │  Keycloak    │    │  OpenSCAP    │    │   GitHub     │           │
+│   │  (SIEM/EDR)  │    │    (IAM)     │    │ (Compliance) │    │ (Change Mgmt)│           │
+│   └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘           │
+│          │                    │                    │                    │                   │
+│          ▼                    ▼                    ▼                    ▼                   │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐          │
+│   │              Evidence Automation Engine (evidence_collector.py)             │          │
+│   │                                                                               │          │
+│   │  • Scheduled collection (daily/weekly)                                       │          │
+│   │  • API-driven (REST, GraphQL)                                                │          │
+│   │  • Automatic evidence storage with SHA256 hashes                             │          │
+│   │  • Maps evidence → controls → frameworks                                     │          │
+│   └─────────────────────────────────────────────────────────────────────────────┘          │
+│                                              │                                               │
+│                                              ▼                                               │
+│                                   /var/lib/grc/evidence/                                    │
+│                                   CC1-*, CC6-*, CC7-*, etc.                                 │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+                                              │
+                                              ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              INTELLIGENCE LAYER (AI)                                         │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐          │
+│   │           Questionnaire Engine (questionnaire_engine.py)                     │          │
+│   │                                                                               │          │
+│   │  Input: "Do you enforce MFA for all users?"                                  │          │
+│   │     ↓                                                                         │          │
+│   │  1. Extract keywords: ["MFA", "authentication", "users"]                     │          │
+│   │  2. Query DB for matching controls (CC6.1)                                   │          │
+│   │  3. Retrieve evidence (Keycloak config, Wazuh logs)                          │          │
+│   │  4. Send to Claude API with context                                          │          │
+│   │     ↓                                                                         │          │
+│   │  Output: "Yes, we enforce MFA via Keycloak..."                               │          │
+│   │          Confidence: 95% | Review: No                                        │          │
+│   └─────────────────────────────────────────────────────────────────────────────┘          │
+│                                              │                                               │
+│                          ┌───────────────────┴───────────────────┐                          │
+│                          ▼                                       ▼                          │
+│            ┌─────────────────────────┐           ┌─────────────────────────┐               │
+│            │  Claude API             │           │  Database Storage       │               │
+│            │  (Anthropic)            │           │  (questionnaire_        │               │
+│            │                         │           │   responses)            │               │
+│            └─────────────────────────┘           └─────────────────────────┘               │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+                                              │
+                                              ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              OUTPUT LAYER                                                    │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐          │
+│   │          Audit Package Generator (generate_audit_package.py)                 │          │
+│   │                                                                               │          │
+│   │  Generates:                                                                   │          │
+│   │  • 00-SUMMARY.html (executive dashboard)                                     │          │
+│   │  • CC1-control-environment/                                                  │          │
+│   │    ├── CC1.1.html (control summary)                                          │          │
+│   │    ├── org-chart.pdf                                                         │          │
+│   │    └── policy-access-control.pdf                                             │          │
+│   │  • CC6-access-controls/                                                      │          │
+│   │    ├── CC6.1.html                                                            │          │
+│   │    ├── keycloak-mfa-config.json                                              │          │
+│   │    └── wazuh-auth-logs.json                                                  │          │
+│   └─────────────────────────────────────────────────────────────────────────────┘          │
+│                                              │                                               │
+│                                              ▼                                               │
+│                          client-framework-evidence-DATE.zip                                 │
+│                               (Ready for auditors)                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              ORCHESTRATION LAYER (Optional)                                  │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐          │
+│   │                         Temporal.io Workflows                                │          │
+│   │                                                                               │          │
+│   │  Daily:                                                                       │          │
+│   │  ├─ Collect Wazuh evidence                                                   │          │
+│   │  ├─ Collect Keycloak evidence                                                │          │
+│   │  └─ Store to database                                                        │          │
+│   │                                                                               │          │
+│   │  Weekly:                                                                      │          │
+│   │  ├─ Run OpenSCAP scans                                                       │          │
+│   │  ├─ Collect GitHub audit logs                                                │          │
+│   │  └─ Generate compliance reports                                              │          │
+│   │                                                                               │          │
+│   │  On-demand:                                                                   │          │
+│   │  ├─ Answer questionnaires                                                    │          │
+│   │  └─ Generate audit packages                                                  │          │
+│   └─────────────────────────────────────────────────────────────────────────────┘          │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              INTERFACE LAYER                                                 │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│   ┌───────────────┐    ┌───────────────┐    ┌───────────────┐    ┌───────────────┐        │
+│   │  CLI (grc)    │    │  Docker       │    │  REST API     │    │  Trust Center │        │
+│   │               │    │  Compose      │    │  (Future)     │    │  UI (Future)  │        │
+│   │ grc collect   │    │               │    │               │    │               │        │
+│   │ grc audit     │    │ docker-compose│    │ /api/v1/...   │    │ React SPA     │        │
+│   │ grc status    │    │   up/down     │    │               │    │               │        │
+│   └───────────────┘    └───────────────┘    └───────────────┘    └───────────────┘        │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                         KEY MAPPINGS: CREATURE DB → GRC                                      │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│   creatures          →  assets (physical/logical resources to protect)                      │
+│   dependencies       →  risk_propagation (failures cascade through dependencies)            │
+│   sovereignty        →  vendor_risk (who controls what, kill switch planning)               │
+│   criticality        →  asset_classification (determines control requirements)              │
+│   creature_class     →  asset_type (servers, apps, data, people)                            │
+│   kill_switches      →  vendor_dependencies.kill_switch_plan                                │
+│                                                                                              │
+│   NEW GRC ENTITIES:                                                                          │
+│   • controls         →  how we protect creatures                                            │
+│   • evidence         →  proof controls work                                                 │
+│   • policies         →  documented rules                                                    │
+│   • risks            →  threats to creatures                                                │
+│   • frameworks       →  external requirements (SOC 2, ISO, etc.)                            │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                         EXAMPLE: END-TO-END FLOW                                             │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│   1. Creature registered: "proxmox-host-01" (hypervisor)                                    │
+│      ├─ creature_class: "hypervisor"                                                        │
+│      ├─ criticality: "critical"                                                             │
+│      └─ dependencies: [10 VMs depend on this]                                               │
+│                                                                                              │
+│   2. Risk identified: "Hardware failure could take down 10 VMs"                             │
+│      ├─ likelihood: high                                                                    │
+│      ├─ impact: high                                                                        │
+│      └─ inherent_risk_score: 16                                                             │
+│                                                                                              │
+│   3. Control implemented: CC7.5 "System monitoring with Wazuh"                              │
+│      ├─ automation_level: fully_automated                                                   │
+│      └─ testing_frequency: daily                                                            │
+│                                                                                              │
+│   4. Evidence collected: Wazuh agent status + alerts                                        │
+│      ├─ file: wazuh-proxmox-monitoring-20250328.json                                        │
+│      ├─ hash: sha256:abc123...                                                              │
+│      └─ collection_timestamp: 2025-03-28 02:00:00                                           │
+│                                                                                              │
+│   5. Questionnaire answered: "Do you monitor hypervisor health?"                            │
+│      ├─ answer: "Yes, via Wazuh with daily checks..."                                       │
+│      ├─ confidence: 98%                                                                     │
+│      └─ supporting_evidence: [wazuh-proxmox-monitoring-20250328.json]                       │
+│                                                                                              │
+│   6. Audit package generated: acme-corp-SOC2-evidence-20250328.zip                          │
+│      └─ Contains: CC7-monitoring/CC7.5.html + wazuh evidence                                │
+│                                                                                              │
+│   Result: Complete audit trail from infrastructure → control → evidence → compliance        │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                         DEPLOYMENT OPTIONS                                                   │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│   Option 1: Bare Metal / VM                                                                 │
+│   ├─ PostgreSQL 16+                                                                         │
+│   ├─ Python 3.11+                                                                           │
+│   └─ Evidence collector scripts (systemd timers)                                            │
+│                                                                                              │
+│   Option 2: Docker Compose (recommended)                                                    │
+│   ├─ PostgreSQL container                                                                   │
+│   ├─ Evidence worker container                                                              │
+│   ├─ Temporal.io containers (optional)                                                      │
+│   └─ API container (future)                                                                 │
+│                                                                                              │
+│   Option 3: Kubernetes                                                                      │
+│   ├─ PostgreSQL StatefulSet                                                                 │
+│   ├─ Evidence CronJobs                                                                      │
+│   ├─ Temporal cluster                                                                       │
+│   └─ API Deployment + Service                                                               │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘

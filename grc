@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+"""
+GRC Platform CLI
+Unified command-line interface for the GRC platform
+"""
+
+import os
+import sys
+import argparse
+import subprocess
+from pathlib import Path
+import yaml
+from datetime import datetime
+
+
+class GRCCLI:
+    """Main CLI class"""
+    
+    def __init__(self):
+        self.config_path = Path.cwd() / "config.yaml"
+        self.config = self._load_config()
+    
+    def _load_config(self):
+        """Load configuration file"""
+        if not self.config_path.exists():
+            print(f"⚠️  Config file not found: {self.config_path}")
+            print("💡 Run: grc init")
+            return {}
+        
+        with open(self.config_path, 'r') as f:
+            return yaml.safe_load(f)
+    
+    def cmd_init(self, args):
+        """Initialize GRC platform"""
+        print("🚀 Initializing GRC Platform...")
+        
+        # Check if config exists
+        if self.config_path.exists():
+            response = input(f"⚠️  Config file already exists at {self.config_path}. Overwrite? [y/N]: ")
+            if response.lower() != 'y':
+                print("❌ Initialization cancelled.")
+                return
+        
+        # Copy example config
+        example_config = Path(__file__).parent / "config.example.yaml"
+        if example_config.exists():
+            import shutil
+            shutil.copy(example_config, self.config_path)
+            print(f"✅ Created config file: {self.config_path}")
+        else:
+            print("❌ config.example.yaml not found")
+            return
+        
+        # Check database connection
+        print("\n📊 Checking database connection...")
+        try:
+            import psycopg2
+            config = yaml.safe_load(open(self.config_path))
+            conn = psycopg2.connect(**config['database'])
+            conn.close()
+            print("✅ Database connection successful")
+        except Exception as e:
+            print(f"❌ Database connection failed: {e}")
+            print("💡 Update database credentials in config.yaml")
+        
+        # Check required environment variables
+        print("\n🔑 Checking environment variables...")
+        required_vars = ['ANTHROPIC_API_KEY', 'DB_PASSWORD']
+        missing_vars = [var for var in required_vars if not os.environ.get(var)]
+        
+        if missing_vars:
+            print(f"⚠️  Missing environment variables: {', '.join(missing_vars)}")
+            print("💡 Set them in your shell:")
+            for var in missing_vars:
+                print(f"   export {var}=your-value")
+        else:
+            print("✅ All required environment variables are set")
+        
+        print("\n✅ Initialization complete!")
+        print("📖 Next steps:")
+        print("   1. Review and update config.yaml with your credentials")
+        print("   2. Run: grc db init  # Initialize database schema")
+        print("   3. Run: grc collect  # Start evidence collection")
+    
+    def cmd_db_init(self, args):
+        """Initialize database schema"""
+        print("📊 Initializing database schema...")
+        
+        schema_file = Path(__file__).parent / "schema.sql"
+        if not schema_file.exists():
+            print(f"❌ Schema file not found: {schema_file}")
+            return
+        
+        try:
+            import psycopg2
+            conn = psycopg2.connect(**self.config['database'])
+            with conn.cursor() as cur:
+                with open(schema_file, 'r') as f:
+                    cur.execute(f.read())
+            conn.commit()
+            conn.close()
+            print("✅ Database schema initialized successfully")
+            print("📊 Control libraries loaded:")
+            print("   - SOC 2")
+            print("   - ISO 27001")
+            print("   - NIST 800-53")
+            print("   - HIPAA")
+            print("   - PCI-DSS")
+            print("   - GDPR")
+        except Exception as e:
+            print(f"❌ Database initialization failed: {e}")
+    
+    def cmd_collect(self, args):
+        """Collect evidence"""
+        print(f"🔍 Collecting evidence for {args.framework}...")
+        
+        cmd = [
+            'python3',
+            str(Path(__file__).parent / 'evidence_collector.py'),
+            '--config', str(self.config_path),
+            '--framework', args.framework
+        ]
+        
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Evidence collection failed: {e}")
+            sys.exit(1)
+    
+    def cmd_audit(self, args):
+        """Generate audit package"""
+        print(f"📦 Generating audit package for {args.client} ({args.framework})...")
+        
+        output_dir = args.output or Path.cwd() / 'audit-packages'
+        
+        cmd = [
+            'python3',
+            str(Path(__file__).parent / 'generate_audit_package.py'),
+            '--client', args.client,
+            '--framework', args.framework,
+            '--config', str(self.config_path),
+            '--output-dir', str(output_dir)
+        ]
+        
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Audit package generation failed: {e}")
+            sys.exit(1)
+    
+    def cmd_questionnaire(self, args):
+        """Answer questionnaire"""
+        print(f"🤖 Answering questionnaire {args.template_id}...")
+        
+        output_file = args.output or f"questionnaire-{datetime.now().strftime('%Y%m%d')}.html"
+        
+        cmd = [
+            'python3',
+            str(Path(__file__).parent / 'questionnaire_engine.py'),
+            '--config', str(self.config_path),
+            '--template-id', args.template_id,
+            '--output', output_file
+        ]
+        
+        if args.save:
+            cmd.append('--save-to-db')
+        
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Questionnaire answering failed: {e}")
+            sys.exit(1)
+    
+    def cmd_status(self, args):
+        """Show compliance status"""
+        print("📊 GRC Platform Status\n")
+        
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            
+            conn = psycopg2.connect(**self.config['database'], cursor_factory=RealDictCursor)
+            
+            # Get framework status
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT 
+                        framework_name,
+                        total_controls,
+                        implemented_controls,
+                        controls_with_evidence,
+                        automated_controls,
+                        implementation_percentage
+                    FROM v_audit_readiness
+                    ORDER BY framework_name
+                """)
+                frameworks = cur.fetchall()
+            
+            if frameworks:
+                print("Compliance Frameworks:")
+                print("-" * 80)
+                for fw in frameworks:
+                    print(f"\n📋 {fw['framework_name']}")
+                    print(f"   Total Controls: {fw['total_controls']}")
+                    print(f"   Implemented: {fw['implemented_controls']} ({fw['implementation_percentage']}%)")
+                    print(f"   With Evidence: {fw['controls_with_evidence']}")
+                    print(f"   Automated: {fw['automated_controls']}")
+            else:
+                print("⚠️  No frameworks configured yet")
+            
+            # Get recent evidence
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT COUNT(*) as total, MAX(collection_timestamp) as latest
+                    FROM evidence
+                    WHERE collection_timestamp > NOW() - INTERVAL '30 days'
+                """)
+                evidence_stats = cur.fetchone()
+            
+            print(f"\n📂 Evidence (last 30 days): {evidence_stats['total']} items")
+            if evidence_stats['latest']:
+                print(f"   Latest collection: {evidence_stats['latest']}")
+            
+            # Get open findings
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT COUNT(*) as total
+                    FROM audit_findings
+                    WHERE status IN ('open', 'in_progress')
+                """)
+                findings = cur.fetchone()
+            
+            print(f"\n⚠️  Open Findings: {findings['total']}")
+            
+            conn.close()
+            
+        except Exception as e:
+            print(f"❌ Failed to fetch status: {e}")
+    
+    def cmd_docker(self, args):
+        """Manage Docker deployment"""
+        if args.action == 'up':
+            print("🐳 Starting GRC Platform containers...")
+            cmd = ['docker-compose', 'up', '-d']
+        elif args.action == 'down':
+            print("🐳 Stopping GRC Platform containers...")
+            cmd = ['docker-compose', 'down']
+        elif args.action == 'logs':
+            print("🐳 Showing container logs...")
+            cmd = ['docker-compose', 'logs', '-f']
+        else:
+            print(f"❌ Unknown action: {args.action}")
+            return
+        
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Docker command failed: {e}")
+            sys.exit(1)
+
+
+def main():
+    """Main entry point"""
+    parser = argparse.ArgumentParser(
+        description='GRC Platform CLI',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  grc init                        # Initialize platform
+  grc db init                     # Set up database
+  grc collect --framework SOC2    # Collect evidence
+  grc audit --client acme --framework SOC2  # Generate audit package
+  grc questionnaire --template-id <uuid> --save  # Answer questionnaire
+  grc status                      # Show compliance status
+  grc docker up                   # Start Docker containers
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+    
+    # Init command
+    parser_init = subparsers.add_parser('init', help='Initialize GRC platform')
+    
+    # DB command
+    parser_db = subparsers.add_parser('db', help='Database operations')
+    db_subparsers = parser_db.add_subparsers(dest='db_command')
+    db_subparsers.add_parser('init', help='Initialize database schema')
+    
+    # Collect command
+    parser_collect = subparsers.add_parser('collect', help='Collect evidence')
+    parser_collect.add_argument('--framework', default='SOC2', choices=['SOC2', 'ISO27001', 'NIST-800-53', 'HIPAA', 'PCI-DSS'])
+    
+    # Audit command
+    parser_audit = subparsers.add_parser('audit', help='Generate audit package')
+    parser_audit.add_argument('--client', required=True, help='Client name')
+    parser_audit.add_argument('--framework', required=True, choices=['SOC2', 'ISO27001', 'NIST-800-53', 'HIPAA', 'PCI-DSS'])
+    parser_audit.add_argument('--output', help='Output directory')
+    
+    # Questionnaire command
+    parser_quest = subparsers.add_parser('questionnaire', help='Answer questionnaire')
+    parser_quest.add_argument('--template-id', required=True, help='Questionnaire template UUID')
+    parser_quest.add_argument('--output', help='Output HTML file')
+    parser_quest.add_argument('--save', action='store_true', help='Save answers to database')
+    
+    # Status command
+    parser_status = subparsers.add_parser('status', help='Show compliance status')
+    
+    # Docker command
+    parser_docker = subparsers.add_parser('docker', help='Manage Docker deployment')
+    parser_docker.add_argument('action', choices=['up', 'down', 'logs'])
+    
+    args = parser.parse_args()
+    
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+    
+    cli = GRCCLI()
+    
+    # Route to appropriate command
+    if args.command == 'init':
+        cli.cmd_init(args)
+    elif args.command == 'db':
+        if args.db_command == 'init':
+            cli.cmd_db_init(args)
+        else:
+            parser_db.print_help()
+    elif args.command == 'collect':
+        cli.cmd_collect(args)
+    elif args.command == 'audit':
+        cli.cmd_audit(args)
+    elif args.command == 'questionnaire':
+        cli.cmd_questionnaire(args)
+    elif args.command == 'status':
+        cli.cmd_status(args)
+    elif args.command == 'docker':
+        cli.cmd_docker(args)
+
+
+if __name__ == "__main__":
+    main()
