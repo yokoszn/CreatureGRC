@@ -1,0 +1,256 @@
+# Zone 4: AI Agent Stack
+# Complete AI orchestration platform
+# Compatible with CrewAI, LangChain, LlamaIndex (framework-agnostic)
+# Can be deployed standalone or as part of megamonolith
+
+version: '3.8'
+
+services:
+  # Temporal Server - Durable workflow execution
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: temporal
+    restart: unless-stopped
+    ports:
+      - "${TEMPORAL_PORT:-7233}:7233"
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_SEEDS=temporal-db
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=${TEMPORAL_DB_PASSWORD}
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    networks:
+      - zone4
+    volumes:
+      - temporal_config:/etc/temporal
+
+  temporal-db:
+    image: postgres:16-alpine
+    container_name: temporal-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: temporal
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: ${TEMPORAL_DB_PASSWORD}
+    volumes:
+      - temporal_db_data:/var/lib/postgresql/data
+    networks:
+      - zone4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Temporal UI
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: temporal-ui
+    restart: unless-stopped
+    ports:
+      - "${TEMPORAL_UI_PORT:-8080}:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      - temporal
+    networks:
+      - zone4
+
+  # LiteLLM - Multi-LLM Gateway
+  litellm:
+    image: ghcr.io/berriai/litellm:latest
+    container_name: litellm
+    restart: unless-stopped
+    ports:
+      - "${LITELLM_PORT:-4000}:4000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - AZURE_API_KEY=${AZURE_API_KEY}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LITELLM_LOG=INFO
+      - DATABASE_URL=postgresql://litellm:${LITELLM_DB_PASSWORD}@litellm-db:5432/litellm
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+      - litellm_logs:/app/logs
+    command: --config /app/config.yaml --port 4000 --num_workers 4
+    depends_on:
+      litellm-db:
+        condition: service_healthy
+    networks:
+      - zone4
+
+  litellm-db:
+    image: postgres:16-alpine
+    container_name: litellm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${LITELLM_DB_PASSWORD}
+    volumes:
+      - litellm_db_data:/var/lib/postgresql/data
+    networks:
+      - zone4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Obot - Workflow Automation
+  obot:
+    image: obot/obot:latest
+    container_name: obot
+    restart: unless-stopped
+    ports:
+      - "${OBOT_PORT:-9000}:9000"
+    environment:
+      - DATABASE_URL=postgresql://obot:${OBOT_DB_PASSWORD}@obot-db:5432/obot
+      - LITELLM_URL=http://litellm:4000
+      - LITELLM_API_KEY=${LITELLM_MASTER_KEY}
+      - OBOT_SECRET_KEY=${OBOT_SECRET_KEY}
+    volumes:
+      - ../obot_workflows:/app/workflows:ro
+      - obot_data:/app/data
+    depends_on:
+      obot-db:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    networks:
+      - zone4
+
+  obot-db:
+    image: postgres:16-alpine
+    container_name: obot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: obot
+      POSTGRES_USER: obot
+      POSTGRES_PASSWORD: ${OBOT_DB_PASSWORD}
+    volumes:
+      - obot_db_data:/var/lib/postgresql/data
+    networks:
+      - zone4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U obot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # GooseAI - AI Agent Framework
+  gooseai:
+    image: gooseai/gooseai:latest
+    container_name: gooseai
+    restart: unless-stopped
+    ports:
+      - "${GOOSEAI_PORT:-8081}:8081"
+    environment:
+      - LITELLM_BASE_URL=http://litellm:4000
+      - LITELLM_API_KEY=${LITELLM_MASTER_KEY}
+      - GOOSEAI_DATABASE_URL=postgresql://gooseai:${GOOSEAI_DB_PASSWORD}@gooseai-db:5432/gooseai
+    volumes:
+      - gooseai_data:/app/data
+    depends_on:
+      gooseai-db:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    networks:
+      - zone4
+
+  gooseai-db:
+    image: postgres:16-alpine
+    container_name: gooseai-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gooseai
+      POSTGRES_USER: gooseai
+      POSTGRES_PASSWORD: ${GOOSEAI_DB_PASSWORD}
+    volumes:
+      - gooseai_db_data:/var/lib/postgresql/data
+    networks:
+      - zone4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gooseai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Langfuse - LLM Observability
+  langfuse:
+    image: langfuse/langfuse:latest
+    container_name: langfuse
+    restart: unless-stopped
+    ports:
+      - "${LANGFUSE_PORT:-3001}:3000"
+    environment:
+      - DATABASE_URL=postgresql://langfuse:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/langfuse
+      - NEXTAUTH_URL=${LANGFUSE_URL:-http://localhost:3001}
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET}
+      - SALT=${LANGFUSE_SALT}
+      - LANGFUSE_INIT_PROJECT_NAME=${LANGFUSE_PROJECT_NAME:-CreatureGRC}
+      - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_INIT_PROJECT_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    networks:
+      - zone4
+
+  langfuse-db:
+    image: postgres:16-alpine
+    container_name: langfuse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: langfuse
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD}
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+    networks:
+      - zone4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (shared cache for AI agents)
+  redis:
+    image: redis:7-alpine
+    container_name: ai-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - zone4
+
+volumes:
+  temporal_config:
+  temporal_db_data:
+  litellm_logs:
+  litellm_db_data:
+  obot_data:
+  obot_db_data:
+  gooseai_data:
+  gooseai_db_data:
+  langfuse_db_data:
+  redis_data:
+
+networks:
+  zone4:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16

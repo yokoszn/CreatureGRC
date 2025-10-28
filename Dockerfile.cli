@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy CreatureGRC CLI package
+COPY cli/ /app/cli/
+COPY collectors/ /app/collectors/
+COPY schema.sql /app/
+COPY *.py /app/
+
+# Install CLI as package
+RUN pip install -e /app/cli
+
+# Create directories for evidence and audit packages
+RUN mkdir -p /var/lib/grc/evidence /var/lib/grc/audit-packages
+
+# Set entrypoint
+ENTRYPOINT ["creaturegrc"]
+CMD ["--help"]
