@@ -126,6 +126,95 @@ Creature: github-actions-bot (Identity - AI Agent)
     └─ ... (6 more systems)
 ```
 
+### Example: Shadow IT & Cloud Services Discovery
+
+Developers often spin up cloud services outside formal approval - CreatureGRC discovers these automatically:
+
+```
+Creature: alex.johnson (Identity - Staff Member)
+├─ Type: Developer
+├─ Department: Engineering
+├─ Controls: AC-2 (Account Management), CM-8 (System Inventory)
+│
+├─ Has Accounts (8 Creature entries):
+│   ├─ Creature: alex@github (Account)
+│   │   └─ Organizations: yokoszn, personal
+│   │
+│   ├─ Creature: alex@vercel (Account)
+│   │   └─ Teams: company-team, personal-team
+│   │
+│   ├─ Creature: alex@supabase (Account)
+│   │   └─ Projects: 3 (2 personal, 1 company)
+│   │
+│   ├─ Creature: alex@neon (Account)
+│   │   └─ Projects: 2 databases
+│   │
+│   ├─ Creature: alex@cloudflare (Account)
+│   │   └─ Zones: 4 domains managed
+│   │
+│   └─ Creature: alex@v0.dev (Account)
+│       └─ Activity: 12 AI-generated projects (last 30 days)
+│
+└─ Created Infrastructure (Shadow IT Discovered - 11 Creatures):
+    │
+    ├─ Vercel Projects (4):
+    │   ├─ Creature: customer-dashboard-staging (Application)
+    │   │   ├─ Platform: Vercel
+    │   │   ├─ Created: 2024-10-15 via v0.dev template
+    │   │   ├─ URL: customer-dashboard-staging.vercel.app
+    │   │   ├─ Connected: GitHub repo "alex/customer-dash"
+    │   │   ├─ Environment Variables: 12 (3 contain "SECRET")
+    │   │   ├─ Data Classification: UNKNOWN (needs review!)
+    │   │   └─ Controls: CM-8, SA-9 (Third-Party Services)
+    │   │
+    │   ├─ Creature: internal-tools-preview (Application)
+    │   ├─ Creature: api-prototype (Application)
+    │   └─ Creature: alex-personal-blog (Application - PERSONAL!)
+    │
+    ├─ Supabase Instances (3):
+    │   ├─ Creature: customer-db-staging (Application)
+    │   │   ├─ Platform: Supabase
+    │   │   ├─ Region: us-east-1
+    │   │   ├─ Plan: Pro ($25/month)
+    │   │   ├─ Database: PostgreSQL 15
+    │   │   ├─ Tables: 8 (including "users", "payments")
+    │   │   ├─ Auth: Email/password enabled
+    │   │   ├─ Data Classification: LIKELY PII (needs review!)
+    │   │   ├─ Backup Policy: Unknown
+    │   │   └─ Controls: SC-28 (Data at Rest), AC-3 (Access Control)
+    │   │
+    │   ├─ Creature: supabase-test-db (Application)
+    │   └─ Creature: alex-side-project (Application - PERSONAL!)
+    │
+    ├─ Neon Databases (2):
+    │   ├─ Creature: neon-analytics-db (Application)
+    │   │   ├─ Platform: Neon (Serverless Postgres)
+    │   │   ├─ Branch: main (3 dev branches)
+    │   │   ├─ Compute: 0.25 vCPU (auto-scaling)
+    │   │   ├─ Data Classification: UNKNOWN
+    │   │   └─ Controls: SC-28 (Data at Rest)
+    │   │
+    │   └─ Creature: neon-dev-playground (Application)
+    │
+    └─ Cloudflare Zones (2):
+        ├─ Creature: customer-dashboard.example.com (Application)
+        │   ├─ Platform: Cloudflare DNS + CDN
+        │   ├─ Proxied: Yes (DDoS protection)
+        │   ├─ SSL/TLS: Full (Strict)
+        │   ├─ Points To: Vercel (customer-dashboard-staging)
+        │   └─ Controls: SC-7 (Boundary Protection), SC-13 (Cryptography)
+        │
+        └─ Creature: api.example.com (Application)
+
+Risk Assessment:
+  ⚠️  4 projects created via v0.dev without security review
+  ⚠️  2 personal projects on company accounts (policy violation)
+  ⚠️  1 database contains PII without data classification
+  ⚠️  3 services lack backup/disaster recovery plans
+  ✓  All services have SSL/TLS enabled
+  ✓  All discovered and mapped to controls within 24 hours
+```
+
 ### Creature Relationships Create Audit Trails
 
 When you map Creatures to Controls, you're building a **relationship graph** that auditors can follow:
@@ -163,6 +252,13 @@ Automatically collect compliance evidence from your existing tools:
 - **Secrets**: Infisical secret access logs, Vaultwarden password policy compliance
 - **Code**: OneDev code reviews, branch protection, CI/CD pipeline evidence
 - **Containers**: Zot registry image scans, vulnerability reports
+- **Cloud/SaaS (Shadow IT Discovery)**:
+  - **Vercel**: Projects, deployments, domains, environment variables, team membership
+  - **Supabase**: Database instances, auth configs, storage buckets, API usage
+  - **Neon**: Serverless Postgres databases, branches, compute usage
+  - **GitHub**: Repositories, actions, deploy keys, organization membership, audit logs
+  - **Cloudflare**: DNS zones, CDN configs, firewall rules, SSL/TLS settings
+  - **v0.dev**: AI-generated projects, template usage, deployment tracking
 
 ### AI-Powered Workflows (Optional)
 When deployed with the AI Foundry stack:
