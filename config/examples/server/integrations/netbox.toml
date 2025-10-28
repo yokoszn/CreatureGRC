@@ -1,0 +1,37 @@
+# Netbox Integration Configuration
+#
+# Syncs infrastructure inventory from Netbox into CreatureGRC
+
+[netbox]
+enabled = true
+api_url = "${NETBOX_API_URL}"
+token_file = "/run/secrets/netbox_token"
+verify_ssl = true
+timeout = 30
+
+# Sync every 24 hours
+sync_interval = 86400
+
+[netbox.mapping]
+# Map Netbox device roles to creature classes
+device_role_to_class = {
+    "server" = "server",
+    "firewall" = "network-security",
+    "switch" = "network-device",
+    "router" = "network-device",
+    "load-balancer" = "load-balancer",
+    "storage" = "storage",
+}
+
+[netbox.filters]
+# Only sync devices with these tags
+required_tags = ["production", "compliance"]
+
+# Exclude devices with these statuses
+exclude_status = ["decommissioned", "planned", "offline"]
+
+# Only sync specific sites (leave empty for all)
+sites = []
+
+# Only sync specific device types (leave empty for all)
+device_types = []

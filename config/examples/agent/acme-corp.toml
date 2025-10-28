@@ -1,0 +1,50 @@
+# CreatureGRC Agent Configuration
+# Profile: ACME Corporation
+#
+# This is an example agent configuration for a consultant managing
+# multiple clients. Each client has their own profile.
+
+[profile]
+name = "acme-corp"
+mode = "agent"
+description = "ACME Corporation GRC Platform"
+
+[server]
+url = "https://grc.acmecorp.com"
+api_key_file = "~/.config/creaturegrc/credentials/acme-api-key"
+verify_ssl = true
+timeout = 30
+
+[agent]
+# Unique identifier for this agent device (auto-generated if not set)
+device_id = "agent-consultant-laptop-01"
+
+# Local cache for evidence before upload
+evidence_cache_dir = "~/.config/creaturegrc/cache/acme"
+
+# Upload evidence every hour
+upload_interval = 3600
+
+# Number of evidence items to batch in single upload
+batch_size = 100
+
+# Retry failed uploads 3 times
+retry_attempts = 3
+
+[collection]
+# Scanners to run on this device
+enabled_sources = ["netbox", "wazuh"]
+
+# Target compliance frameworks
+frameworks = ["soc2", "iso27001"]
+
+# Run scans every hour
+scan_interval = 3600
+
+[logging]
+level = "INFO"
+format = "text"
+output = "file"
+file = "~/.config/creaturegrc/logs/acme-agent.log"
+max_size_mb = 100
+backup_count = 5

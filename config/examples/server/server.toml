@@ -1,0 +1,64 @@
+# CreatureGRC Server Configuration
+#
+# Full platform deployment with PostgreSQL database
+# Typically deployed via Docker Compose with environment variables
+
+[profile]
+name = "server"
+mode = "server"
+description = "CreatureGRC Central Server"
+
+[database]
+# Database connection (override with environment variables)
+host = "${GRC_DB_HOST:-localhost}"
+port = 5432
+name = "${GRC_DB_NAME:-grc_platform}"
+user = "${GRC_DB_USER:-grc_user}"
+
+# Use Docker secret or file for password
+password_file = "/run/secrets/db_password"
+
+# Connection pool settings
+pool_size = 20
+pool_timeout = 30
+
+[api]
+enabled = true
+host = "0.0.0.0"
+port = 8080
+workers = 4
+
+# CORS origins for web UI
+cors_origins = [
+    "https://admin.example.com",
+    "http://localhost:3000",  # Development
+]
+
+rate_limit = "100/minute"
+auth_method = "api_key"
+
+[evidence]
+storage_dir = "/var/lib/creaturegrc/evidence"
+retention_days = 365  # 1 year retention
+compression = true
+max_size_mb = 1024  # 1GB per evidence file
+
+[integrations]
+config_dir = "/etc/creaturegrc/integrations"
+enabled = [
+    "netbox",
+    "wazuh",
+    "keycloak",
+    "freeipa",
+    "github",
+]
+
+[audit]
+output_dir = "/var/lib/creaturegrc/audit-packages"
+formats = ["pdf", "excel", "zip"]
+compress_packages = true
+
+[logging]
+level = "INFO"
+format = "json"  # JSON for log aggregation
+output = "stdout"  # Docker logs

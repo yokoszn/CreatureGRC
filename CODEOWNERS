@@ -1,0 +1,37 @@
+# CreatureGRC Code Owners
+#
+# These owners will be requested for review when someone opens a pull request
+# that modifies code in these paths.
+
+# Global fallback (all files)
+*                                   @yokoszn
+
+# Contract (requires special review)
+/packages/creature-ir/              @yokoszn
+/packages/creature-ir/**/*.py       @yokoszn
+
+# Core engines
+/packages/creature-core/            @yokoszn
+/packages/creature-dsl/             @yokoszn
+
+# Database schemas (requires DBA review)
+/database/                          @yokoszn
+/database/schemas/                  @yokoszn
+/database/migrations/               @yokoszn
+
+# Configuration
+/config/                            @yokoszn
+/src/creaturegrc/config/            @yokoszn
+
+# Documentation
+/docs/                              @yokoszn
+/docs/adr/                          @yokoszn
+README.md                           @yokoszn
+WORKSPACE.md                        @yokoszn
+
+# CI/CD pipelines
+/.github/workflows/                 @yokoszn
+
+# Security
+SECURITY.md                         @yokoszn
+/tests/conformance/                 @yokoszn

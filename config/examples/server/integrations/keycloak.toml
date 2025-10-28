@@ -1,0 +1,56 @@
+# Keycloak Integration Configuration
+#
+# Syncs users, roles, and authentication events from Keycloak SSO
+
+[keycloak]
+enabled = true
+api_url = "${KEYCLOAK_URL}"
+verify_ssl = true
+timeout = 30
+
+# Keycloak realm
+realm = "master"
+
+# OAuth2 client credentials
+client_id = "${KEYCLOAK_CLIENT_ID}"
+client_secret_file = "/run/secrets/keycloak_client_secret"
+
+# Sync every 4 hours
+sync_interval = 14400
+
+[keycloak.collection]
+# Sync users as identities
+sync_users = true
+
+# Sync roles and groups
+sync_roles = true
+
+# Collect authentication events
+sync_events = true
+
+# Collect admin events (user/role changes)
+sync_admin_events = true
+
+[keycloak.filters]
+# User attributes to include as metadata
+user_attributes = [
+    "email",
+    "firstName",
+    "lastName",
+    "department",
+    "title",
+]
+
+# Event types to collect
+event_types = [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT",
+    "UPDATE_PASSWORD",
+    "UPDATE_PROFILE",
+    "GRANT_CONSENT",
+    "REVOKE_CONSENT",
+]
+
+# Collect events from last N days
+event_lookback_days = 90

@@ -1,0 +1,30 @@
+# CreatureGRC Agent Configuration
+# Profile: Default
+#
+# Minimal agent configuration for single-client deployment
+
+[profile]
+name = "default"
+mode = "agent"
+description = "Default CreatureGRC Agent"
+
+[server]
+url = "http://localhost:8080"
+api_key_file = "~/.config/creaturegrc/credentials/default-api-key"
+verify_ssl = false  # Disable for localhost
+timeout = 30
+
+[agent]
+evidence_cache_dir = "~/.config/creaturegrc/cache"
+upload_interval = 3600
+batch_size = 50
+
+[collection]
+enabled_sources = []  # Enable scanners as needed
+frameworks = ["soc2"]
+scan_interval = 3600
+
+[logging]
+level = "INFO"
+format = "text"
+output = "stdout"
