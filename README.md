@@ -1,255 +1,482 @@
 # CreatureGRC
 
-**Self-Hosted GRC Platform with AI-Powered ServiceNow Control Tower Parity**
+**Open-source compliance automation platform that connects your infrastructure to security controls**
 
-CreatureGRC is a minimal, CLI-driven Governance, Risk, and Compliance (GRC) platform designed for self-hosted Proxmox/LXC environments. It extends your existing "Creature Database" infrastructure tracking with comprehensive compliance management, automated evidence collection, and AI-powered workflows.
+CreatureGRC automates compliance workflows by continuously collecting evidence from your infrastructure and mapping it to security frameworks like SOC 2, ISO 27001, and NIST 800-53. It's designed for teams running self-hosted infrastructure who need to prove compliance without expensive enterprise GRC tools.
 
-## Features
+## What It Does
 
-- **Complete Control Libraries**: OSCAL (NIST 800-53), ComplianceForge SCF, CSA CCM
-- **AI-Powered Workflows**: Multi-LLM orchestration via LiteLLM (Claude, GPT-4, Gemini)
-- **Durable Workflows**: Temporal.io for reliable long-running processes
-- **Automated Evidence Collection**: From Wazuh, Keycloak, Netbox, FreeIPA, and more
-- **Infrastructure Mapping**: Automatic control-to-asset mapping from your Creature Database
-- **Minimal Footprint**: 2GB RAM for core, connects to existing services via API
-- **CLI-First**: No mandatory web UI, designed for automation and IaC
+CreatureGRC solves three core problems:
 
-## Architecture
+1. **Control Management**: Import and organize security controls from major frameworks (NIST, SOC 2, ISO 27001, PCI-DSS, HIPAA)
+2. **Evidence Collection**: Automatically gather compliance evidence from your infrastructure tools (Wazuh, Keycloak, Netbox, FreeIPA, etc.)
+3. **Infrastructure Mapping**: Connect your servers, containers, and services to specific security controls so auditors can see what protects what
 
-CreatureGRC follows a **minimal integration layer** approach:
+Instead of manually taking screenshots and writing documentation for audits, CreatureGRC continuously collects evidence and generates audit packages automatically.
 
+## The Creature Concept
+
+In CreatureGRC, a "**Creature**" is any piece of infrastructure you manage:
+
+- A physical server or VM
+- A container or LXC
+- A network device (firewall, switch, router)
+- A database instance
+- A Kubernetes cluster
+- A SaaS application you integrate with
+
+The name "Creature" represents the idea that your infrastructure is alive - constantly changing, scaling, and evolving. CreatureGRC tracks these changes and ensures your compliance documentation stays current.
+
+**Example Creature taxonomy:**
 ```
-┌─────────────────────────────────────────────────────────┐
-│              PROXMOX HYPERVISOR                         │
-│                                                         │
-│  Existing LXC Services (Helper Scripts)                │
-│  ├─ Wazuh (192.168.1.10)      ─────┐                   │
-│  ├─ Netbox (192.168.1.11)     ─────┤                   │
-│  ├─ Keycloak (192.168.1.20)   ─────┤  API              │
-│  ├─ FreeIPA (192.168.1.21)    ─────┤  Connections      │
-│  ├─ Infisical (192.168.1.22)  ─────┤                   │
-│  ├─ Vaultwarden (192.168.1.23)─────┤                   │
-│  ├─ OneDev (192.168.1.30)     ─────┤                   │
-│  └─ Zot (192.168.1.31)        ─────┘                   │
-│                                  │                      │
-│  New CreatureGRC LXCs            ↓                      │
-│  ├─ GRC Core (192.168.1.100) ◄──────                   │
-│  │  └─ PostgreSQL + CLI                                │
-│  │                                                      │
-│  └─ AI Foundry (192.168.1.101) [Optional]              │
-│     └─ Temporal + LiteLLM + Obot + GooseAI + Langfuse  │
-└─────────────────────────────────────────────────────────┘
+Creature: prod-web-01
+├─ Type: LXC Container
+├─ Zone: DMZ (Zone 5)
+├─ IP: 192.168.1.50
+├─ Services: Nginx, Node.js API
+├─ Controls: AC-3 (Access Control), SI-7 (Software Integrity)
+└─ Evidence: Wazuh vulnerability scans, Netbox configuration
 ```
 
-**No service duplication** - CreatureGRC connects to your existing infrastructure via API.
+When you map Creatures to Controls, you're documenting which infrastructure implements which security requirements. This creates an auditable trail from security policy to actual implementation.
+
+## Key Features
+
+### Compliance Automation
+- **1,400+ Security Controls**: NIST 800-53, ComplianceForge SCF, CSA Cloud Controls Matrix
+- **Framework Mapping**: Automatic cross-mapping between frameworks (e.g., NIST AC-2 → SOC 2 CC6.1)
+- **Control Implementation Tracking**: Document which infrastructure implements each control
+- **Audit Package Generation**: Export evidence bundles for auditors (PDF, Excel, ZIP)
+
+### Evidence Collection
+Automatically collect compliance evidence from your existing tools:
+- **Security**: Wazuh SIEM, vulnerability scans, intrusion detection alerts
+- **Identity**: Keycloak authentication logs, FreeIPA user lifecycle events
+- **Infrastructure**: Netbox asset inventory, IP address management, configuration changes
+- **Secrets**: Infisical secret access logs, Vaultwarden password policy checks
+- **Code**: OneDev code reviews, branch protection rules, CI/CD evidence
+- **Containers**: Zot registry image scans, vulnerability reports
+
+### AI-Powered Workflows (Optional)
+When deployed with the AI Foundry stack:
+- **Gap Analysis**: AI identifies missing controls or incomplete implementations
+- **Smart Questionnaires**: Generate and process control questionnaires using LLMs
+- **Evidence Extraction**: Parse unstructured logs and documents to extract compliance evidence
+- **Vendor Assessment**: Automate security questionnaires for third-party vendors
+- **Multi-LLM Support**: Use Claude, GPT-4, Gemini with automatic fallback and cost tracking
+
+### Self-Hosted & Lightweight
+- **Minimal Core**: 2GB RAM, single container (PostgreSQL + CLI)
+- **No Bloat**: Connects to your existing infrastructure via APIs, doesn't re-deploy services
+- **CLI-First**: Designed for automation, IaC, and scripting
+- **API-Driven**: Integrate with CI/CD pipelines and existing workflows
+- **Privacy**: Your compliance data stays on your infrastructure
+
+## How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. INFRASTRUCTURE (Your Existing Tools)                     │
+│                                                              │
+│  Security       Identity        Infrastructure   Secrets    │
+│  ┌─────────┐   ┌─────────┐    ┌──────────┐    ┌─────────┐ │
+│  │ Wazuh   │   │Keycloak │    │ Netbox   │    │Infisical│ │
+│  │ SIEM    │   │FreeIPA  │    │ Network  │    │Vault-   │ │
+│  │         │   │         │    │ Inventory│    │ warden  │ │
+│  └────┬────┘   └────┬────┘    └────┬─────┘    └────┬────┘ │
+│       │             │              │               │       │
+│       └─────────────┴──────────────┴───────────────┘       │
+│                           │ REST APIs                       │
+└───────────────────────────┼─────────────────────────────────┘
+                            ↓
+┌───────────────────────────────────────────────────────────────┐
+│  2. CREATUREGRC (Compliance Automation Layer)                 │
+│                                                               │
+│  ┌──────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │ Control      │  │ Evidence        │  │ Creature        │ │
+│  │ Library      │  │ Collector       │  │ Mapper          │ │
+│  │              │  │                 │  │                 │ │
+│  │ • NIST       │  │ Pulls from APIs │  │ Infrastructure  │ │
+│  │ • SOC 2      │→ │ Daily/Weekly    │→ │ → Controls      │ │
+│  │ • ISO 27001  │  │ Stores evidence │  │ Mapping         │ │
+│  │ • PCI-DSS    │  │ in database     │  │                 │ │
+│  └──────────────┘  └─────────────────┘  └─────────────────┘ │
+│                                                               │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │ PostgreSQL Database                                  │    │
+│  │ • Controls • Evidence • Creatures • Risk Register    │    │
+│  └──────────────────────────────────────────────────────┘    │
+└───────────────────────────────────────────────────────────────┘
+                            ↓
+┌───────────────────────────────────────────────────────────────┐
+│  3. OUTPUT                                                    │
+│                                                               │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
+│  │ Audit Packages  │  │ Gap Analysis    │  │ CLI Reports  │ │
+│  │                 │  │                 │  │              │ │
+│  │ • Evidence ZIP  │  │ • Missing       │  │ creaturegrc  │ │
+│  │ • Control       │  │   controls      │  │ controls     │ │
+│  │   matrix (Excel)│  │ • Weak areas    │  │ list         │ │
+│  │ • PDF reports   │  │ • Remediation   │  │              │ │
+│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
+└───────────────────────────────────────────────────────────────┘
+```
 
 ## Quick Start
 
 ### Prerequisites
 
-- Proxmox hypervisor with existing LXC services (Wazuh, Netbox, Keycloak, etc.)
-- Unprivileged LXC with nested Docker support (`pct set <vmid> -features nesting=1`)
-- 2GB RAM minimum (GRC Core only), 10GB RAM for AI Foundry
+CreatureGRC can be deployed anywhere Docker runs, but is optimized for:
+- **Proxmox/LXC environments** with existing infrastructure services
+- **Bare metal servers** with Docker
+- **Cloud VMs** (AWS, GCP, Azure)
 
-### Option 1: Minimal Deployment (GRC Core Only)
+**Minimum requirements:**
+- 2GB RAM (core only), 10GB RAM (with AI features)
+- Docker and Docker Compose
+- API access to your infrastructure tools (Wazuh, Netbox, etc.)
 
-**Resource Requirements**: 1 vCPU, 2GB RAM, 20GB disk
+### Basic Installation
 
 ```bash
-# 1. Create GRC Core LXC
-pct create 100 local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst \
-  --hostname grc-core \
-  --memory 2048 --cores 1 --rootfs local-lvm:20 \
-  --net0 name=eth0,bridge=vmbr0,ip=192.168.1.100/24,gw=192.168.1.1 \
-  --unprivileged 1 --features nesting=1
+# Clone repository
+git clone https://github.com/yokoszn/CreatureGRC.git
+cd CreatureGRC
 
-# 2. Install Docker in LXC
-pct start 100
-pct exec 100 -- bash -c "apt update && apt install -y docker.io docker-compose git"
+# Configure environment
+cp config/.env.minimal.example .env
+nano .env  # Add your API endpoints and credentials
 
-# 3. Clone and configure
-pct exec 100 -- git clone https://github.com/yokoszn/CreatureGRC.git /opt/creaturegrc
-pct exec 100 -- cp /opt/creaturegrc/config/.env.minimal.example /opt/creaturegrc/.env
+# Deploy core platform
+cd deployments
+docker-compose -f docker-compose.grc-core.yml up -d
 
-# 4. Edit .env with your LXC IPs
-pct exec 100 -- nano /opt/creaturegrc/.env
+# Import security control frameworks
+docker exec grc-cli python /app/scripts/import_oscal_controls.py     # NIST 800-53
+docker exec grc-cli python /app/scripts/import_scf_controls.py       # ComplianceForge SCF
+docker exec grc-cli python /app/scripts/import_csa_ccm.py            # CSA Cloud Controls
 
-# 5. Deploy
-pct exec 100 -- bash -c "cd /opt/creaturegrc/deployments && docker-compose -f docker-compose.grc-core.yml up -d"
+# Sync your infrastructure (Creatures) from Netbox
+docker exec grc-cli creaturegrc creatures sync --source netbox
 
-# 6. Import control libraries
-pct exec 100 -- docker exec grc-cli python /app/scripts/import_oscal_controls.py
-pct exec 100 -- docker exec grc-cli python /app/scripts/import_scf_controls.py
-pct exec 100 -- docker exec grc-cli python /app/scripts/import_csa_ccm.py
+# Collect initial evidence
+docker exec grc-cli creaturegrc collect evidence --source wazuh
+docker exec grc-cli creaturegrc collect evidence --source keycloak
 
-# 7. Sync infrastructure from Netbox
-pct exec 100 -- docker exec grc-cli creaturegrc creatures sync --source netbox
-
-# 8. Collect evidence
-pct exec 100 -- docker exec grc-cli creaturegrc collect evidence --source wazuh
+# Generate your first audit package
+docker exec grc-cli creaturegrc audit generate --framework soc2 --output /var/lib/grc/audit-packages/
 ```
 
-### Option 2: Full Deployment (GRC Core + AI Foundry)
+See [docs/quickstart.md](docs/quickstart.md) for detailed installation instructions including the optional AI Foundry deployment.
 
-**Resource Requirements**: 2 LXCs, 5 vCPU, 10GB RAM, 70GB disk total
+## Usage Examples
 
-See [docs/quickstart.md](docs/quickstart.md) for detailed AI Foundry deployment.
+### List Available Compliance Frameworks
+
+```bash
+$ creaturegrc frameworks list
+
+Available Compliance Frameworks:
+┌──────────────┬─────────────┬──────────┐
+│ Framework    │ Version     │ Controls │
+├──────────────┼─────────────┼──────────┤
+│ NIST 800-53  │ Revision 5  │ 1,084    │
+│ SOC 2        │ 2017        │ 64       │
+│ ISO 27001    │ 2022        │ 93       │
+│ PCI-DSS      │ 4.0         │ 362      │
+│ SCF          │ 2024.1      │ 212      │
+│ CSA CCM      │ v4.0        │ 197      │
+└──────────────┴─────────────┴──────────┘
+```
+
+### View Your Infrastructure (Creatures)
+
+```bash
+$ creaturegrc creatures list
+
+Infrastructure Assets (Creatures):
+┌─────────────────┬──────────┬────────────────┬──────────┬──────────┐
+│ Name            │ Type     │ IP             │ Zone     │ Controls │
+├─────────────────┼──────────┼────────────────┼──────────┼──────────┤
+│ prod-web-01     │ LXC      │ 192.168.1.50   │ DMZ      │ 12       │
+│ prod-db-01      │ LXC      │ 192.168.1.60   │ Data     │ 18       │
+│ wazuh-server    │ LXC      │ 192.168.1.10   │ Security │ 8        │
+│ k8s-cluster-01  │ Cluster  │ 192.168.1.70-79│ App      │ 24       │
+└─────────────────┴──────────┴────────────────┴──────────┴──────────┘
+
+Total: 47 creatures tracked
+```
+
+### Map Infrastructure to Controls
+
+```bash
+$ creaturegrc controls map-creatures --framework soc2
+
+Analyzing infrastructure coverage for SOC 2...
+✓ CC6.1 (Logical Access): 8 creatures mapped
+✓ CC6.2 (Privileged Access): 3 creatures mapped
+✓ CC7.2 (Change Management): 12 creatures mapped
+✗ CC7.3 (Data Backup): No creatures mapped (Gap!)
+
+Recommendation: Add backup infrastructure for CC7.3 compliance
+```
+
+### Collect Evidence Automatically
+
+```bash
+$ creaturegrc collect evidence --source wazuh --days 30
+
+Collecting evidence from Wazuh (last 30 days)...
+✓ Vulnerability scans: 127 events collected
+✓ Security alerts: 1,842 events collected
+✓ Compliance checks: 94 events collected
+✓ File integrity monitoring: 312 events collected
+
+Evidence stored and mapped to 23 controls
+```
+
+### Generate Audit Package
+
+```bash
+$ creaturegrc audit generate --framework soc2 --output ./audit-package-2024-q4/
+
+Generating SOC 2 Type II audit package...
+✓ Control matrix (Excel): control-matrix.xlsx
+✓ Evidence bundle (ZIP): evidence-bundle.zip (1,247 files)
+✓ Infrastructure map (PDF): infrastructure-map.pdf
+✓ Gap analysis report (PDF): gap-analysis.pdf
+✓ Risk register (Excel): risk-register.xlsx
+
+Audit package ready: ./audit-package-2024-q4/
+```
+
+## Configuration
+
+### Connecting Your Infrastructure
+
+Edit `.env` to point to your existing services:
+
+```bash
+# Security Tools
+WAZUH_API_URL=https://wazuh.example.com:55000
+WAZUH_USER=admin
+WAZUH_PASSWORD=your-password
+
+# Infrastructure Inventory
+NETBOX_API_URL=https://netbox.example.com
+NETBOX_TOKEN=your-netbox-api-token
+
+# Identity & Access
+KEYCLOAK_URL=https://keycloak.example.com
+KEYCLOAK_CLIENT_ID=creaturegrc
+KEYCLOAK_CLIENT_SECRET=your-secret
+
+FREEIPA_API_URL=https://ipa.example.com
+FREEIPA_USER=admin
+FREEIPA_PASSWORD=your-password
+
+# Secrets Management
+INFISICAL_API_URL=https://infisical.example.com
+INFISICAL_TOKEN=your-token
+
+VAULTWARDEN_API_URL=https://vault.example.com
+VAULTWARDEN_TOKEN=your-token
+```
+
+See [config/.env.minimal.example](config/.env.minimal.example) for the complete configuration template.
+
+## Architecture
+
+CreatureGRC uses a **minimal integration architecture** - it doesn't replace your existing tools, it connects to them via APIs.
+
+### Components
+
+**GRC Core** (Required, 2GB RAM):
+- PostgreSQL database (controls, evidence, creatures, risk register)
+- CLI application (evidence collection, reporting)
+- Python scripts (framework imports, evidence collectors)
+
+**AI Foundry** (Optional, 8GB RAM):
+- **LiteLLM**: Multi-LLM gateway with automatic fallback (Claude, GPT-4, Gemini)
+- **Temporal**: Durable workflow orchestration (scheduled evidence collection)
+- **Obot**: Workflow automation (gap analysis, vendor assessments)
+- **Langfuse**: LLM observability and cost tracking
+- **GooseAI**: AI agent framework
+
+### Deployment Patterns
+
+**Pattern 1: Standalone Container** (Simplest)
+```
+Single host running docker-compose with GRC Core
+Connects to infrastructure APIs over the network
+```
+
+**Pattern 2: Proxmox LXC** (Recommended for self-hosted)
+```
+Separate LXC containers for each service
+GRC Core in one LXC, AI Foundry in another
+Infrastructure services in their own LXCs
+All communicate via API over virtual network
+```
+
+**Pattern 3: Kubernetes** (Enterprise)
+```
+Deploy as Helm chart
+Scale evidence collectors horizontally
+High availability database with replicas
+```
+
+## Control Libraries
+
+CreatureGRC imports controls from industry-standard frameworks:
+
+| Framework | Purpose | Controls | Mappings |
+|-----------|---------|----------|----------|
+| **NIST 800-53 Rev 5** | Federal security controls | 1,084 | Foundation for all mappings |
+| **ComplianceForge SCF** | Unified security framework | 212 | Maps to 137+ other frameworks |
+| **CSA CCM v4** | Cloud security controls | 197 | Cloud-specific mappings |
+
+These frameworks automatically cross-map to common compliance requirements:
+- **SOC 2 Type II** (Trust Services Criteria)
+- **ISO/IEC 27001:2022** (Information Security)
+- **PCI-DSS v4.0** (Payment Card Industry)
+- **HIPAA** (Healthcare Privacy)
+- **GDPR** (EU Data Protection)
+- **FedRAMP** (US Federal Cloud)
+
+When you implement NIST AC-2 (Account Management), CreatureGRC automatically knows it satisfies:
+- SOC 2 CC6.1
+- ISO 27001 A.9.2.1
+- PCI-DSS Requirement 8.1
+
+## AI Features (Optional)
+
+Deploy the AI Foundry stack to enable advanced automation:
+
+### Intelligent Gap Analysis
+```bash
+$ creaturegrc analyze gaps --framework soc2 --use-ai
+
+AI Gap Analysis (Claude 3.5 Sonnet)...
+
+Critical Gaps Found:
+1. CC7.3 - System Operations: No automated backup verification detected
+   Recommendation: Implement Veeam backup monitoring in Wazuh
+   Effort: Medium (2-4 hours)
+
+2. CC6.7 - Access Removal: Offboarding process not documented
+   Recommendation: Create FreeIPA → Keycloak deprovisioning workflow
+   Effort: Low (1-2 hours)
+
+3. CC8.1 - Risk Assessment: No formal risk register maintained
+   Recommendation: Use CreatureGRC risk module to track findings
+   Effort: Low (30 mins)
+```
+
+### Smart Questionnaires
+```bash
+$ creaturegrc questionnaire generate --control nist-ac-2 --use-ai
+
+Generating AI questionnaire for NIST AC-2 (Account Management)...
+
+Questions generated (10 questions):
+1. How are user accounts provisioned in your environment?
+2. What is the approval process for granting elevated privileges?
+3. How often are user accounts reviewed for appropriateness?
+...
+
+Send to stakeholder? [y/N]: y
+✓ Questionnaire sent to security-team@example.com
+```
+
+### Evidence Extraction from Unstructured Data
+```bash
+$ creaturegrc evidence extract --file security-policy.pdf --use-ai
+
+Extracting compliance evidence from security-policy.pdf...
+
+AI Extracted Evidence:
+✓ Access Control Policy → Maps to NIST AC-1, SOC 2 CC6.1
+✓ Password Requirements → Maps to NIST IA-5, SOC 2 CC6.1
+✓ Incident Response Plan → Maps to NIST IR-1, SOC 2 CC7.3
+✓ Change Management Process → Maps to NIST CM-3, SOC 2 CC8.1
+
+12 controls evidenced from document
+```
 
 ## Repository Structure
 
 ```
 CreatureGRC/
-├── README.md                       # This file
-├── cli/                            # CLI application
-│   ├── creaturegrc/               # CLI package
-│   │   ├── __init__.py
-│   │   └── cli.py                 # Click-based CLI
-│   └── setup.py
-├── database/                       # Database schemas
-│   ├── schema.sql                 # Full GRC schema
-│   └── migrations/                # Future schema migrations
-├── scripts/                        # Utility scripts
-│   ├── import_oscal_controls.py   # Import NIST 800-53
-│   ├── import_scf_controls.py     # Import ComplianceForge SCF
-│   ├── import_csa_ccm.py          # Import CSA CCM
-│   ├── evidence_collector.py      # Automated evidence collection
-│   ├── map_creatures_to_controls.py  # Infrastructure mapping
-│   ├── generate_audit_package.py  # Audit package generation
-│   ├── litellm_integration.py     # Multi-LLM client
-│   └── questionnaire_engine.py    # AI questionnaire engine
-├── workflows/                      # Workflow definitions
-│   ├── temporal/                  # Temporal workflows
-│   │   └── temporal_workflows.py
-│   └── obot/                      # Obot workflow YAMLs
-│       ├── control-gap-analysis.yaml
-│       ├── evidence-ingestion.yaml
-│       └── vendor-risk-assessment.yaml
-├── deployments/                    # Deployment configurations
-│   ├── docker-compose.grc-core.yml      # Minimal GRC (PostgreSQL + CLI)
-│   ├── docker-compose.ai-foundry.yml    # AI stack (Temporal, LiteLLM, etc.)
-│   ├── docker-compose.yml               # Legacy full-featured (deprecated)
-│   └── Dockerfile.cli                   # CLI container image
-├── config/                         # Configuration files
-│   ├── .env.minimal.example       # Environment variables template
-│   ├── config.example.yaml        # YAML config template
-│   └── litellm-config.yaml        # LiteLLM model routing
-├── docs/                           # Documentation
-│   ├── architecture/              # Architecture docs
-│   │   ├── overview.md            # High-level architecture
-│   │   ├── minimal-deployment.md  # Minimal integration approach
-│   │   └── v2-zoned.md            # Legacy zoned architecture
-│   ├── quickstart.md              # Quick start guide (current)
-│   ├── deployment.md              # Detailed deployment guide
-│   └── implementation-summary.md  # Implementation details
-├── collectors/                     # Custom evidence collectors (future)
-└── playbooks/                      # Ansible playbooks (future)
+├── cli/                  # CLI application (Click-based)
+├── database/             # PostgreSQL schemas
+├── scripts/              # Evidence collectors, importers, generators
+├── workflows/            # Temporal and Obot workflow definitions
+├── deployments/          # Docker Compose files
+├── config/               # Configuration templates
+├── docs/                 # Documentation
+│   ├── architecture/     # Design documents
+│   ├── quickstart.md     # Getting started guide
+│   └── deployment.md     # Production deployment
+└── README.md             # This file
 ```
 
-## CLI Usage
-
-```bash
-# List supported frameworks
-creaturegrc frameworks list
-
-# List controls for a framework
-creaturegrc controls list --framework soc2
-
-# Sync infrastructure from Netbox
-creaturegrc creatures sync --source netbox
-
-# Map controls to infrastructure
-creaturegrc controls map-creatures
-
-# Collect evidence from Wazuh
-creaturegrc collect evidence --source wazuh
-
-# Generate audit package
-creaturegrc audit generate --framework soc2 --output /var/lib/grc/audit-packages/
-```
-
-## Control Libraries
-
-| Framework | Controls | Source | Import Script |
-|-----------|----------|--------|---------------|
-| **NIST 800-53 Rev 5** | 1000+ | [NIST OSCAL](https://github.com/usnistgov/oscal-content) | `import_oscal_controls.py` |
-| **ComplianceForge SCF** | 200+ | [ComplianceForge](https://www.complianceforge.com) | `import_scf_controls.py` |
-| **CSA CCM v4** | 197 | [CSA](https://cloudsecurityalliance.org) | `import_csa_ccm.py` |
-
-All frameworks are imported into a unified control taxonomy with automatic cross-mappings.
-
-## AI Features
-
-When AI Foundry is deployed, you get:
-
-- **Multi-LLM Gateway**: Automatic fallback between Claude, GPT-4, Gemini
-- **Control Gap Analysis**: AI-powered analysis of control implementation gaps
-- **Automated Questionnaires**: AI generates and collects evidence via questionnaires
-- **Vendor Risk Assessment**: Automated vendor security assessments
-- **Evidence Ingestion**: AI extracts compliance evidence from unstructured data
-- **Observability**: Full LLM call tracking via Langfuse
-
-## Integration Points
-
-CreatureGRC connects to your existing services via REST APIs:
-
-- **Wazuh**: Security event evidence, vulnerability scans
-- **Netbox**: Infrastructure inventory, IP management
-- **Keycloak**: Authentication logs, access reviews
-- **FreeIPA**: Identity management, user lifecycle
-- **Infisical**: Secrets audit trail
-- **Vaultwarden**: Password policy compliance
-- **OneDev**: Code review evidence, branch protection
-- **Zot**: Container image scanning
+See the [full repository structure](docs/architecture/overview.md) for details.
 
 ## Documentation
 
-- **[Quickstart Guide](docs/quickstart.md)** - Get running in 5 minutes
-- **[Architecture Overview](docs/architecture/overview.md)** - Detailed design
-- **[Minimal Deployment](docs/architecture/minimal-deployment.md)** - Integration layer approach
-- **[Deployment Guide](docs/deployment.md)** - Production deployment
-- **[Implementation Summary](docs/implementation-summary.md)** - Technical details
-
-## Development
-
-```bash
-# Install CLI in development mode
-cd cli
-pip install -e .
-
-# Run tests (future)
-pytest tests/
-
-# Run linting
-flake8 cli/ scripts/
-
-# Format code
-black cli/ scripts/
-```
+- **[Quick Start Guide](docs/quickstart.md)** - Get running in 5 minutes
+- **[Architecture Overview](docs/architecture/overview.md)** - System design and components
+- **[Deployment Guide](docs/deployment.md)** - Production deployment patterns
+- **[API Integration Guide](docs/api-integration.md)** - Connect your infrastructure tools
+- **[Control Mapping Guide](docs/control-mapping.md)** - Map infrastructure to controls
+- **[Evidence Collection Guide](docs/evidence-collection.md)** - Automate compliance evidence
 
 ## Roadmap
 
-- [ ] Ansible playbooks for automated LXC provisioning
+- [ ] Web UI (trust center portal for customers)
+- [ ] Real-time control monitoring dashboards
+- [ ] Ansible playbooks for infrastructure provisioning
 - [ ] Custom evidence collector SDK
-- [ ] REST API (optional, for integrations)
-- [ ] Web UI (trust center portal)
-- [ ] Real-time control testing
-- [ ] Compliance dashboard exports (PDF, Excel)
+- [ ] REST API for third-party integrations
 - [ ] RBAC for multi-tenant deployments
-
-## License
-
-[Specify license - MIT, Apache 2.0, proprietary, etc.]
+- [ ] Compliance dashboard exports (PowerPoint, PDF)
+- [ ] Jira integration for remediation tracking
+- [ ] Slack/Teams notifications for control failures
 
 ## Contributing
 
-Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! CreatureGRC is built for the community.
+
+**Areas we need help:**
+- Additional evidence collectors (AWS, Azure, GCP, Datadog, etc.)
+- Framework mapping improvements
+- UI/UX design for web portal
+- Documentation and tutorials
+- Translation (i18n)
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Support
 
+- **Documentation**: [docs/](docs/)
 - **Issues**: [GitHub Issues](https://github.com/yokoszn/CreatureGRC/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yokoszn/CreatureGRC/discussions)
-- **Documentation**: [docs/](docs/)
+- **Security**: Report vulnerabilities to security@creaturegrc.dev
+
+## License
+
+[Specify license - recommend Apache 2.0 or MIT for open source]
+
+## Acknowledgments
+
+CreatureGRC builds on excellent open source projects:
+- [OSCAL](https://pages.nist.gov/OSCAL/) - NIST Open Security Controls Assessment Language
+- [ComplianceForge](https://www.complianceforge.com/) - Secure Controls Framework
+- [CSA](https://cloudsecurityalliance.org/) - Cloud Controls Matrix
+- [LiteLLM](https://github.com/BerriAI/litellm) - Multi-LLM gateway
+- [Temporal](https://temporal.io/) - Durable workflow orchestration
 
 ---
 
-**CreatureGRC** - Extend your Creature Database with enterprise GRC capabilities.
+**Built for teams who need compliance without compromise.**
