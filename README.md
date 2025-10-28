@@ -46,7 +46,20 @@ In CreatureGRC, a "**Creature**" is **any entity in your environment** that has 
 - Databases and data stores
 - CI/CD pipelines
 
-The name "Creature" reflects that your environment is **alive** - people join and leave, systems scale up and down, accounts get created and revoked, AI agents get deployed. CreatureGRC tracks these changes in real-time to keep compliance documentation current.
+**5. Infrastructure-as-Code & Automation** (Control Implementations)
+- **IaC Tools**: Terraform configs, Ansible playbooks, CloudFormation templates
+- **Container Orchestration**: Docker Compose files, Kubernetes manifests, Helm charts
+- **Scripts**: Bash/PowerShell scripts that enforce policies or implement controls
+- **Automation Workflows**: GitHub Actions, GitLab CI, Jenkins pipelines
+- **Configuration Management**: Ansible roles, Puppet modules, Chef cookbooks
+- **Hypervisors & Platforms**: Proxmox configurations, VMware templates
+
+**Why these are Creatures**: IaC and automation **implement controls** - they're not just tools, they're the documented enforcement mechanisms. For example:
+- A Terraform script deploying hardened servers → Implements CM-2 (Baseline Configuration)
+- An Ansible playbook rotating SSH keys → Implements IA-5 (Authenticator Management)
+- A PowerShell script enforcing password policies → Implements IA-5(1) (Password-based Authentication)
+
+The name "Creature" reflects that your environment is **alive** - people join and leave, systems scale up and down, accounts get created and revoked, AI agents get deployed, scripts are updated, policies change. CreatureGRC tracks these changes in real-time to keep compliance documentation current.
 
 ### Example: A Staff Member as Creatures
 
@@ -247,11 +260,23 @@ Automatically collect compliance evidence from your existing tools:
 - **Identities**: Sync staff, contractors, and AI agents from HR systems and directories
 - **Accounts**: Track user accounts, service accounts, SSH keys, API tokens across all systems
 - **Security**: Wazuh SIEM events, vulnerability scans, intrusion detection alerts
-- **Identity & Access**: Keycloak authentication logs, FreeIPA user lifecycle, access reviews
-- **Infrastructure**: Netbox asset inventory, IP management, configuration changes
-- **Secrets**: Infisical secret access logs, Vaultwarden password policy compliance
-- **Code**: OneDev code reviews, branch protection, CI/CD pipeline evidence
-- **Containers**: Zot registry image scans, vulnerability reports
+- **Identity & Access**:
+  - **Keycloak**: SSO authentication logs, user sessions, access grants
+  - **FreeIPA**: LDAP user lifecycle, group memberships, Kerberos tickets
+  - **M365 / Entra ID**: Azure AD user provisioning, MFA enrollment, conditional access policies
+- **Infrastructure**: Netbox asset inventory, IP management, configuration changes, device roles
+- **Secrets**:
+  - **Infisical**: Secret access audit trail, rotation policies
+  - **Vaultwarden**: Password policy compliance, vault access logs
+- **Code & CI/CD**:
+  - **OneDev**: Code reviews, branch protection, CI/CD pipeline evidence
+  - **GitHub**: Repository audits, Actions workflows, deploy keys, commit signing
+- **Containers**: Zot registry image scans, vulnerability reports, image signatures
+- **Documentation & Processes (MCP/API)**:
+  - **Jira**: Issue tracking, change tickets, incident management workflows
+  - **Confluence**: Policies, procedures, SOPs, runbooks, architectural decision records (ADRs)
+  - **JQL Queries**: Automated evidence collection via custom JQL (e.g., "Security incidents last 90 days")
+  - **Policy Scanning**: Extract controls from documented policies and map to frameworks
 - **Cloud/SaaS (Shadow IT Discovery)**:
   - **Vercel**: Projects, deployments, domains, environment variables, team membership
   - **Supabase**: Database instances, auth configs, storage buckets, API usage
@@ -564,23 +589,70 @@ CreatureGRC uses a **minimal integration architecture** - it doesn't replace you
 
 **Pattern 1: Standalone Container** (Simplest)
 ```
-Single host running docker-compose with GRC Core
-Connects to infrastructure APIs over the network
+Single Docker host running GRC Core
+Connects to cloud/SaaS services via public APIs
+Suitable for: Small teams, cloud-only infrastructure
 ```
 
 **Pattern 2: Proxmox LXC** (Recommended for self-hosted)
+
+This is the ideal deployment for teams running self-hosted infrastructure:
+
 ```
-Separate LXC containers for each service
-GRC Core in one LXC, AI Foundry in another
-Infrastructure services in their own LXCs
-All communicate via API over virtual network
+PROXMOX HYPERVISOR (Single server or cluster)
+│
+├─ Zone 1: Development & Artifacts
+│  ├─ LXC: OneDev (192.168.1.30) - Git server, CI/CD
+│  └─ LXC: Zot (192.168.1.31) - Container registry
+│
+├─ Zone 2: Security & Monitoring
+│  ├─ LXC: Wazuh (192.168.1.10) - SIEM, vulnerability scanning
+│  └─ LXC: Netbox (192.168.1.11) - Infrastructure inventory, IPAM
+│
+├─ Zone 3: Secrets Management
+│  ├─ LXC: Infisical (192.168.1.22) - Secrets management
+│  └─ LXC: Vaultwarden (192.168.1.23) - Password manager
+│
+├─ Zone 4: AI Agents (CreatureGRC AI Foundry)
+│  └─ LXC: AI-Foundry (192.168.1.101)
+│     └─ Docker: Temporal, LiteLLM, Obot, GooseAI, Langfuse
+│
+├─ Zone 5: DMZ / Production Apps
+│  └─ LXC: prod-web-01, prod-api-01, etc.
+│
+├─ Zone 6: Identity & Access Management
+│  ├─ LXC: Keycloak (192.168.1.20) - SSO, OIDC, SAML
+│  └─ LXC: FreeIPA (192.168.1.21) - LDAP, Kerberos, DNS
+│
+└─ Zone 7: GRC & Compliance (CreatureGRC Core)
+   └─ LXC: GRC-Core (192.168.1.100)
+      └─ Docker: PostgreSQL + CLI
+
+External Cloud Services (Connected via API):
+├─ M365 / Entra ID - Email, Office, user directory
+├─ Jira / Confluence - Ticketing, documentation, policies
+├─ Vercel - Application hosting
+├─ Supabase / Neon - Serverless databases
+├─ GitHub - Code repositories
+└─ Cloudflare - DNS, CDN, security
 ```
+
+**Key Benefits:**
+- **Isolation**: Each service in its own LXC with resource limits
+- **Security**: Network zones with firewall rules between zones
+- **Efficiency**: LXCs use ~10% overhead vs VMs (50%+ overhead)
+- **Scalability**: Add more Proxmox nodes for HA clustering
+- **Backup**: Proxmox Backup Server snapshots all LXCs
+- **Migration**: Live migrate LXCs between nodes with zero downtime
 
 **Pattern 3: Kubernetes** (Enterprise)
 ```
-Deploy as Helm chart
-Scale evidence collectors horizontally
-High availability database with replicas
+Kubernetes cluster (on-prem or cloud)
+CreatureGRC deployed as Helm chart
+Evidence collectors as CronJobs
+PostgreSQL with StatefulSet and persistent volumes
+High availability with pod autoscaling
+Ingress for API access
 ```
 
 ## Control Libraries
@@ -727,12 +799,40 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Acknowledgments
 
-CreatureGRC builds on excellent open source projects:
-- [OSCAL](https://pages.nist.gov/OSCAL/) - NIST Open Security Controls Assessment Language
-- [ComplianceForge](https://www.complianceforge.com/) - Secure Controls Framework
-- [CSA](https://cloudsecurityalliance.org/) - Cloud Controls Matrix
-- [LiteLLM](https://github.com/BerriAI/litellm) - Multi-LLM gateway
+CreatureGRC builds on excellent open source and commercial projects:
+
+**Compliance Frameworks:**
+- [NIST OSCAL](https://pages.nist.gov/OSCAL/) - Open Security Controls Assessment Language
+- [ComplianceForge SCF](https://www.complianceforge.com/) - Secure Controls Framework
+- [CSA Cloud Controls Matrix](https://cloudsecurityalliance.org/) - Cloud security controls
+
+**AI & Orchestration:**
+- [LiteLLM](https://github.com/BerriAI/litellm) - Multi-LLM gateway with unified API
 - [Temporal](https://temporal.io/) - Durable workflow orchestration
+- [Langfuse](https://langfuse.com/) - LLM observability and analytics
+- [Obot](https://docs.obot.ai/) - Workflow automation framework
+
+**Infrastructure & Security Tools (Integration Partners):**
+- [Wazuh](https://wazuh.com/) - Open source SIEM and XDR platform
+- [Netbox](https://netbox.dev/) - Infrastructure resource modeling (IPAM, DCIM)
+- [Keycloak](https://www.keycloak.org/) - Open source identity and access management
+- [FreeIPA](https://www.freeipa.org/) - Identity management for Linux/Unix
+- [Infisical](https://infisical.com/) - Open source secrets management
+- [Vaultwarden](https://github.com/dani-garcia/vaultwarden) - Bitwarden-compatible password manager
+- [OneDev](https://onedev.io/) - Self-hosted Git server with CI/CD
+- [Zot](https://zotregistry.io/) - OCI-native container registry
+
+**Cloud/SaaS Platforms (API Integrations):**
+- [Vercel](https://vercel.com/) - Frontend cloud platform
+- [Supabase](https://supabase.com/) - Open source Firebase alternative
+- [Neon](https://neon.tech/) - Serverless PostgreSQL
+- [Cloudflare](https://www.cloudflare.com/) - CDN and security platform
+- [GitHub](https://github.com/) - Code hosting and CI/CD
+
+**Documentation & Ticketing:**
+- [Atlassian Jira](https://www.atlassian.com/software/jira) - Issue tracking and project management
+- [Atlassian Confluence](https://www.atlassian.com/software/confluence) - Team documentation and collaboration
+- [Microsoft 365](https://www.microsoft.com/microsoft-365) - Productivity suite and Entra ID (Azure AD)
 
 ---
 
