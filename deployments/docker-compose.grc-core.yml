@@ -18,7 +18,7 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${GRC_DB_USER:-grc_user}"]
       interval: 10s
@@ -31,7 +31,7 @@ services:
   cli:
     build:
       context: ..
-      dockerfile: Dockerfile.cli
+      dockerfile: deployments/Dockerfile.cli
     container_name: grc-cli
     restart: unless-stopped
     depends_on:
