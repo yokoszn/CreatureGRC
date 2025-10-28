@@ -9,36 +9,141 @@ CreatureGRC automates compliance workflows by continuously collecting evidence f
 CreatureGRC solves three core problems:
 
 1. **Control Management**: Import and organize security controls from major frameworks (NIST, SOC 2, ISO 27001, PCI-DSS, HIPAA)
-2. **Evidence Collection**: Automatically gather compliance evidence from your infrastructure tools (Wazuh, Keycloak, Netbox, FreeIPA, etc.)
-3. **Infrastructure Mapping**: Connect your servers, containers, and services to specific security controls so auditors can see what protects what
+2. **Evidence Collection**: Automatically gather compliance evidence from your infrastructure, identity systems, and security tools
+3. **Relationship Mapping**: Track who (people/AI) has what access (accounts) to which systems (infrastructure) and map them to security controls
 
-Instead of manually taking screenshots and writing documentation for audits, CreatureGRC continuously collects evidence and generates audit packages automatically.
+Instead of manually tracking access in spreadsheets and taking screenshots for audits, CreatureGRC continuously monitors your environment and generates audit packages automatically.
+
+**Key insight**: Compliance isn't just about infrastructure - it's about the relationships between people, their accounts, the systems they access, and the controls that govern those relationships. CreatureGRC models all of these as "Creatures" and tracks how they interconnect.
 
 ## The Creature Concept
 
-In CreatureGRC, a "**Creature**" is any piece of infrastructure you manage:
+In CreatureGRC, a "**Creature**" is **any entity in your environment** that has security or compliance implications:
 
-- A physical server or VM
-- A container or LXC
-- A network device (firewall, switch, router)
-- A database instance
-- A Kubernetes cluster
-- A SaaS application you integrate with
+### Types of Creatures
 
-The name "Creature" represents the idea that your infrastructure is alive - constantly changing, scaling, and evolving. CreatureGRC tracks these changes and ensures your compliance documentation stays current.
+**1. Infrastructure** (Physical/Virtual Assets)
+- Servers, VMs, containers (LXC, Docker)
+- Network devices (firewalls, switches, routers)
+- Kubernetes clusters
+- Storage systems
 
-**Example Creature taxonomy:**
+**2. Identities** (People & Automation)
+- Staff members (employees, contractors)
+- AI agents and automation workflows
+- Service accounts and bots
+- External vendors and partners
+
+**3. Accounts** (Access Points)
+- User accounts in each system (Keycloak, FreeIPA, AWS IAM, etc.)
+- Admin/privileged accounts
+- API tokens and service credentials
+- SSH keys and certificates
+
+**4. Applications** (Software Systems)
+- SaaS applications
+- Internal applications
+- Databases and data stores
+- CI/CD pipelines
+
+The name "Creature" reflects that your environment is **alive** - people join and leave, systems scale up and down, accounts get created and revoked, AI agents get deployed. CreatureGRC tracks these changes in real-time to keep compliance documentation current.
+
+### Example: A Staff Member as Creatures
+
+A single person creates multiple Creatures in your environment:
+
 ```
-Creature: prod-web-01
-├─ Type: LXC Container
-├─ Zone: DMZ (Zone 5)
-├─ IP: 192.168.1.50
-├─ Services: Nginx, Node.js API
-├─ Controls: AC-3 (Access Control), SI-7 (Software Integrity)
-└─ Evidence: Wazuh vulnerability scans, Netbox configuration
+Creature: jane.doe (Identity - Staff Member)
+├─ Type: Employee
+├─ Role: Senior DevOps Engineer
+├─ Department: Engineering
+├─ Controls: AC-2 (Account Management), AC-5 (Separation of Duties)
+│
+├─ Has Accounts (6 Creature entries):
+│   ├─ Creature: jane.doe@keycloak (Account)
+│   │   ├─ System: Keycloak SSO
+│   │   ├─ Roles: developer, admin
+│   │   └─ Controls: AC-3 (Access Enforcement)
+│   │
+│   ├─ Creature: jane.doe@freeipa (Account)
+│   │   ├─ System: FreeIPA LDAP
+│   │   ├─ Groups: engineering, sudo
+│   │   └─ Controls: AC-6 (Least Privilege)
+│   │
+│   ├─ Creature: jane.doe@aws (Account)
+│   │   ├─ System: AWS IAM
+│   │   ├─ Policies: EC2FullAccess, S3ReadOnly
+│   │   └─ Controls: AC-3, AC-6
+│   │
+│   ├─ Creature: jane.doe@github (Account)
+│   │   ├─ System: GitHub Enterprise
+│   │   ├─ Access: yokoszn/CreatureGRC (admin)
+│   │   └─ Controls: CM-3 (Change Management)
+│   │
+│   ├─ Creature: jane-ssh-key-prod (Account)
+│   │   ├─ System: Production Servers SSH
+│   │   ├─ Key Type: ed25519
+│   │   └─ Controls: IA-5 (Authenticator Management)
+│   │
+│   └─ Creature: jane-db-admin@postgres (Account)
+│       ├─ System: Production PostgreSQL
+│       ├─ Privileges: SUPERUSER
+│       └─ Controls: AC-6 (Least Privilege), AU-2 (Audit Events)
+│
+└─ Accesses Infrastructure (12 Creature entries):
+    ├─ Creature: prod-web-01 (Infrastructure)
+    ├─ Creature: prod-db-01 (Infrastructure)
+    ├─ Creature: k8s-cluster-prod (Infrastructure)
+    └─ ... (9 more systems)
 ```
 
-When you map Creatures to Controls, you're documenting which infrastructure implements which security requirements. This creates an auditable trail from security policy to actual implementation.
+### Example: An AI Agent as Creatures
+
+Automation creates its own Creature graph:
+
+```
+Creature: github-actions-bot (Identity - AI Agent)
+├─ Type: CI/CD Automation
+├─ Purpose: Deploy CreatureGRC to production
+├─ Controls: CM-3 (Change Management), SA-10 (Developer Configuration)
+│
+├─ Has Accounts (4 Creature entries):
+│   ├─ Creature: gh-actions@github (Account)
+│   │   └─ Permissions: Read code, write deployments
+│   │
+│   ├─ Creature: deploy-bot@k8s (Account)
+│   │   └─ Permissions: Apply manifests, rollout status
+│   │
+│   ├─ Creature: docker-builder@zot (Account)
+│   │   └─ Permissions: Push images to registry
+│   │
+│   └─ Creature: infra-token@infisical (Account)
+│       └─ Permissions: Read production secrets
+│
+└─ Modifies Infrastructure (8 Creature entries):
+    ├─ Creature: k8s-cluster-prod (Infrastructure)
+    ├─ Creature: zot-registry (Infrastructure)
+    └─ ... (6 more systems)
+```
+
+### Creature Relationships Create Audit Trails
+
+When you map Creatures to Controls, you're building a **relationship graph** that auditors can follow:
+
+```
+Staff Member → Has Account → Accesses System → Stores Data → Satisfies Control
+
+Example:
+jane.doe (Identity)
+  → jane.doe@aws (Account)
+    → prod-db-01 (Infrastructure)
+      → customer-pii (Data)
+        → NIST AC-3, AC-6, AU-2, AU-12
+        → SOC 2 CC6.1, CC7.2
+        → HIPAA §164.308(a)(4)
+```
+
+This creates an auditable trail from **who** (identity) → **through what** (account) → **to where** (infrastructure) → **protecting what** (data) → **satisfying which controls** (compliance).
 
 ## Key Features
 
@@ -50,11 +155,13 @@ When you map Creatures to Controls, you're documenting which infrastructure impl
 
 ### Evidence Collection
 Automatically collect compliance evidence from your existing tools:
-- **Security**: Wazuh SIEM, vulnerability scans, intrusion detection alerts
-- **Identity**: Keycloak authentication logs, FreeIPA user lifecycle events
-- **Infrastructure**: Netbox asset inventory, IP address management, configuration changes
-- **Secrets**: Infisical secret access logs, Vaultwarden password policy checks
-- **Code**: OneDev code reviews, branch protection rules, CI/CD evidence
+- **Identities**: Sync staff, contractors, and AI agents from HR systems and directories
+- **Accounts**: Track user accounts, service accounts, SSH keys, API tokens across all systems
+- **Security**: Wazuh SIEM events, vulnerability scans, intrusion detection alerts
+- **Identity & Access**: Keycloak authentication logs, FreeIPA user lifecycle, access reviews
+- **Infrastructure**: Netbox asset inventory, IP management, configuration changes
+- **Secrets**: Infisical secret access logs, Vaultwarden password policy compliance
+- **Code**: OneDev code reviews, branch protection, CI/CD pipeline evidence
 - **Containers**: Zot registry image scans, vulnerability reports
 
 ### AI-Powered Workflows (Optional)
@@ -96,10 +203,10 @@ When deployed with the AI Foundry stack:
 │  │ Control      │  │ Evidence        │  │ Creature        │ │
 │  │ Library      │  │ Collector       │  │ Mapper          │ │
 │  │              │  │                 │  │                 │ │
-│  │ • NIST       │  │ Pulls from APIs │  │ Infrastructure  │ │
-│  │ • SOC 2      │→ │ Daily/Weekly    │→ │ → Controls      │ │
-│  │ • ISO 27001  │  │ Stores evidence │  │ Mapping         │ │
-│  │ • PCI-DSS    │  │ in database     │  │                 │ │
+│  │ • NIST       │  │ Pulls from APIs │  │ Identities      │ │
+│  │ • SOC 2      │→ │ Daily/Weekly    │→ │ + Accounts      │ │
+│  │ • ISO 27001  │  │ Stores evidence │  │ + Infrastr.     │ │
+│  │ • PCI-DSS    │  │ in database     │  │ → Controls      │ │
 │  └──────────────┘  └─────────────────┘  └─────────────────┘ │
 │                                                               │
 │  ┌──────────────────────────────────────────────────────┐    │
@@ -189,22 +296,76 @@ Available Compliance Frameworks:
 └──────────────┴─────────────┴──────────┘
 ```
 
-### View Your Infrastructure (Creatures)
+### View All Creatures (Infrastructure, People, Accounts, AI)
 
 ```bash
 $ creaturegrc creatures list
 
-Infrastructure Assets (Creatures):
-┌─────────────────┬──────────┬────────────────┬──────────┬──────────┐
-│ Name            │ Type     │ IP             │ Zone     │ Controls │
-├─────────────────┼──────────┼────────────────┼──────────┼──────────┤
-│ prod-web-01     │ LXC      │ 192.168.1.50   │ DMZ      │ 12       │
-│ prod-db-01      │ LXC      │ 192.168.1.60   │ Data     │ 18       │
-│ wazuh-server    │ LXC      │ 192.168.1.10   │ Security │ 8        │
-│ k8s-cluster-01  │ Cluster  │ 192.168.1.70-79│ App      │ 24       │
-└─────────────────┴──────────┴────────────────┴──────────┴──────────┘
+All Creatures (Identities, Accounts, Infrastructure, Applications):
+┌──────────────────────┬─────────────┬──────────────────┬──────────┬──────────┐
+│ Name                 │ Type        │ System/Location  │ Category │ Controls │
+├──────────────────────┼─────────────┼──────────────────┼──────────┼──────────┤
+│ jane.doe             │ Identity    │ Engineering Dept │ Person   │ 8        │
+│ jane.doe@keycloak    │ Account     │ Keycloak SSO     │ Person   │ 4        │
+│ jane.doe@aws         │ Account     │ AWS IAM          │ Person   │ 6        │
+│ jane-ssh-key-prod    │ Account     │ Production SSH   │ Person   │ 3        │
+│ github-actions-bot   │ Identity    │ CI/CD Pipeline   │ AI       │ 5        │
+│ deploy-bot@k8s       │ Account     │ Kubernetes       │ AI       │ 4        │
+│ prod-web-01          │ Infrastr.   │ 192.168.1.50     │ LXC      │ 12       │
+│ prod-db-01           │ Infrastr.   │ 192.168.1.60     │ LXC      │ 18       │
+│ wazuh-server         │ Infrastr.   │ 192.168.1.10     │ LXC      │ 8        │
+│ k8s-cluster-prod     │ Infrastr.   │ 192.168.1.70-79  │ Cluster  │ 24       │
+│ postgresql-prod      │ Application │ prod-db-01       │ Database │ 11       │
+│ api-gateway          │ Application │ k8s-cluster-prod │ Service  │ 15       │
+└──────────────────────┴─────────────┴──────────────────┴──────────┴──────────┘
 
-Total: 47 creatures tracked
+Total: 847 creatures tracked (124 identities, 389 accounts, 287 infrastructure, 47 apps)
+
+$ creaturegrc creatures list --type identity
+
+Identities (People & AI Agents):
+┌──────────────────────┬─────────────┬──────────────────┬──────────┬──────────┐
+│ Name                 │ Type        │ Department/Role  │ Accounts │ Controls │
+├──────────────────────┼─────────────┼──────────────────┼──────────┼──────────┤
+│ jane.doe             │ Person      │ Engineering      │ 6        │ 8        │
+│ john.smith           │ Person      │ Security         │ 8        │ 12       │
+│ github-actions-bot   │ AI Agent    │ CI/CD            │ 4        │ 5        │
+│ backup-automation    │ AI Agent    │ Operations       │ 3        │ 7        │
+│ vendor-acme-corp     │ Vendor      │ External         │ 2        │ 4        │
+└──────────────────────┴─────────────┴──────────────────┴──────────┴──────────┘
+
+$ creaturegrc creatures show jane.doe
+
+Creature: jane.doe (Identity - Person)
+Type: Employee
+Department: Engineering
+Role: Senior DevOps Engineer
+Hire Date: 2023-03-15
+Status: Active
+
+Accounts (6):
+  ├─ jane.doe@keycloak      → Roles: developer, admin
+  ├─ jane.doe@freeipa       → Groups: engineering, sudo
+  ├─ jane.doe@aws           → Policies: EC2FullAccess, S3ReadOnly
+  ├─ jane.doe@github        → Access: yokoszn/CreatureGRC (admin)
+  ├─ jane-ssh-key-prod      → Key: ed25519, Fingerprint: SHA256:abc...
+  └─ jane-db-admin@postgres → Privileges: SUPERUSER
+
+Infrastructure Access (12):
+  ├─ prod-web-01 (LXC)
+  ├─ prod-db-01 (LXC)
+  ├─ k8s-cluster-prod (Cluster)
+  └─ ... (9 more)
+
+Mapped Controls:
+  ├─ NIST AC-2 (Account Management)
+  ├─ NIST AC-3 (Access Enforcement)
+  ├─ NIST AC-5 (Separation of Duties)
+  ├─ NIST AC-6 (Least Privilege)
+  ├─ SOC 2 CC6.1 (Logical Access Controls)
+  └─ ISO 27001 A.9.2.1 (User Registration)
+
+Last Evidence Collection: 2024-10-28 02:45 UTC (Keycloak audit logs)
 ```
 
 ### Map Infrastructure to Controls
