@@ -1,0 +1,66 @@
+# Backstage App Configuration for CreatureGRC Development
+#
+# This file is used when running a local Backstage instance to test
+# the CreatureGRC catalog integration.
+#
+# Usage:
+#   1. Set up a Backstage instance: npx @backstage/create-app
+#   2. Copy this file to your Backstage app's root directory
+#   3. Add to app-config.yaml or app-config.local.yaml
+
+# Catalog configuration
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+
+  rules:
+    - allow: [Component, System, API, Resource, Location, Domain]
+
+  locations:
+    # CreatureGRC System
+    - type: file
+      target: ../../CreatureGRC/catalog-info.yaml
+
+    # Individual component catalogs (if created)
+    - type: file
+      target: ../../CreatureGRC/packages/creature-ir/catalog-info.yaml
+
+    - type: file
+      target: ../../CreatureGRC/packages/creature-core/catalog-info.yaml
+
+    # Or use URL location for remote catalogs
+    - type: url
+      target: https://github.com/yokoszn/CreatureGRC/blob/main/catalog-info.yaml
+      rules:
+        - allow: [Component, System, API, Domain]
+
+# TechDocs configuration
+techdocs:
+  builder: 'local' # Use 'external' for production
+  generator:
+    runIn: 'local' # Use 'docker' for production
+  publisher:
+    type: 'local' # Use 'awsS3' or 'googleGcs' for production
+    local:
+      publishDirectory: '../../CreatureGRC/docs'
+
+# Organization data
+organization:
+  name: CreatureGRC Contributors
+
+# Integrations
+integrations:
+  github:
+    - host: github.com
+      apps:
+        - $include: github-app-credentials.yaml
+
+# Optional: Custom theme for CreatureGRC
+app:
+  title: CreatureGRC Developer Portal
+  branding:
+    theme:
+      palette:
+        primary: indigo
+        accent: indigo

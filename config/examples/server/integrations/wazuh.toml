@@ -1,0 +1,50 @@
+# Wazuh Integration Configuration
+#
+# Collects security events and compliance evidence from Wazuh SIEM
+
+[wazuh]
+enabled = true
+api_url = "${WAZUH_API_URL}"
+verify_ssl = true
+timeout = 30
+
+# Authentication (use token_file or username + password_file)
+token_file = "/run/secrets/wazuh_token"
+# OR
+# username = "${WAZUH_USER}"
+# password_file = "/run/secrets/wazuh_password"
+
+# Sync every hour
+sync_interval = 3600
+
+[wazuh.collection]
+# Collect security alerts
+collect_alerts = true
+
+# Collect vulnerability scan results
+collect_vulnerabilities = true
+
+# Collect compliance check results (PCI-DSS, HIPAA, etc.)
+collect_compliance = true
+
+# Collect file integrity monitoring events
+collect_fim = true
+
+# Collect system inventory
+collect_inventory = true
+
+[wazuh.filters]
+# Minimum alert level to collect (0-15)
+min_alert_level = 5
+
+# Alert groups to collect
+alert_groups = [
+    "authentication_failed",
+    "authentication_success",
+    "access_control",
+    "policy_monitoring",
+    "vulnerability-detector",
+]
+
+# Agents to collect from (empty = all agents)
+agent_ids = []
