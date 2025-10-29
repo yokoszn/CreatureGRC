@@ -136,43 +136,46 @@ def load_config(
     config_file: Optional[Path] = None,
 ) -> CreatureGRCConfig:
     """
-    Load CreatureGRC configuration.
+    Load CreatureGRC configuration with correct precedence.
 
-    Priority order:
-    1. Explicit config file (--config flag)
-    2. Environment variables (CREATUREGRC_*)
+    Priority order (highest to lowest):
+    1. Environment variables (CREATUREGRC_*)
+    2. Explicit config file (--config flag)
     3. Profile file (~/.config/creaturegrc/profiles/{profile}.toml)
     4. Active profile (~/.config/creaturegrc/config.toml)
     5. System config (/etc/creaturegrc/server.toml) if in server mode
     6. Defaults
+
+    This ensures environment variables can override file settings for containers/CI.
     """
 
-    config_data = {}
+    # Build file config data (lowest to highest priority)
+    file_config_data = {}
 
-    # Load from system config (server mode)
+    # 1. System config (lowest priority file)
     system_config = SYSTEM_CONFIG_DIR / "server.toml"
     if system_config.exists():
-        config_data.update(toml.load(system_config))
+        file_config_data.update(toml.load(system_config))
 
-    # Load from profile
+    # 2. Profile config
     if not config_file:
         profile_name = profile or get_active_profile()
         try:
-            config_data.update(load_profile_config(profile_name))
+            file_config_data.update(load_profile_config(profile_name))
         except FileNotFoundError:
             console.print(
                 f"[yellow]Warning: Profile '{profile_name}' not found, using defaults[/yellow]"
             )
 
-    # Load from explicit config file
+    # 3. Explicit config file (highest priority file)
     if config_file:
-        config_data.update(toml.load(config_file))
+        file_config_data.update(toml.load(config_file))
 
-    # Override with environment variables
-    # Pydantic Settings will handle this automatically
-
-    # Create config object
-    config = CreatureGRCConfig(**config_data)
+    # Create config with custom settings source that reads:
+    # 1. Environment variables (highest priority)
+    # 2. File config (lower priority)
+    # 3. Defaults (lowest priority)
+    config = CreatureGRCConfig(_file_config=file_config_data)
 
     return config
 

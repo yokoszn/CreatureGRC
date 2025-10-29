@@ -1,0 +1,310 @@
+# Backstage Entity: CreatureGRC System
+#
+# This is the root catalog entry for the CreatureGRC compliance automation platform.
+# It defines the system, its components, APIs, and documentation.
+#
+# Learn more: https://backstage.io/docs/features/software-catalog/
+
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: creaturegrc
+  description: Open-source compliance automation platform connecting infrastructure to security controls
+  tags:
+    - compliance
+    - grc
+    - security
+    - soc2
+    - iso27001
+    - nist
+    - python
+  links:
+    - url: https://github.com/yokoszn/CreatureGRC
+      title: GitHub Repository
+      icon: github
+    - url: https://yokoszn.github.io/CreatureGRC
+      title: Documentation
+      icon: docs
+spec:
+  owner: platform-team
+  domain: security-compliance
+---
+# Backstage Domain: Security & Compliance
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: security-compliance
+  description: Security, compliance, and governance domain
+spec:
+  owner: security-team
+---
+# CreatureGRC Core Service
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creaturegrc-core
+  description: Main CreatureGRC package with CLI and configuration management
+  tags:
+    - python
+    - cli
+    - pip-package
+  annotations:
+    github.com/project-slug: yokoszn/CreatureGRC
+    backstage.io/techdocs-ref: dir:.
+  links:
+    - url: https://pypi.org/project/creaturegrc/
+      title: PyPI Package
+      icon: package
+spec:
+  type: library
+  lifecycle: production
+  owner: platform-team
+  system: creaturegrc
+  dependsOn:
+    - component:creature-ir
+    - component:creature-core
+    - component:creature-dsl
+  providesApis:
+    - creaturegrc-cli-api
+    - creaturegrc-rest-api
+---
+# Creature IR - The Contract
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creature-ir
+  description: CreatureGRC intermediate representation - THE ONLY stable contract
+  tags:
+    - python
+    - contract
+    - pydantic
+    - core
+  annotations:
+    backstage.io/techdocs-ref: dir:./packages/creature-ir
+spec:
+  type: library
+  lifecycle: production
+  owner: platform-team
+  system: creaturegrc
+  subcomponentOf: creaturegrc-core
+  providesApis:
+    - creature-ir-api
+---
+# Creature Core - Engines
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creature-core
+  description: Core engines for scan, map, and audit operations
+  tags:
+    - python
+    - engine
+    - scanner
+  annotations:
+    backstage.io/techdocs-ref: dir:./packages/creature-core
+spec:
+  type: library
+  lifecycle: production
+  owner: platform-team
+  system: creaturegrc
+  subcomponentOf: creaturegrc-core
+  dependsOn:
+    - component:creature-ir
+  providesApis:
+    - creature-scanner-api
+    - creature-mapper-api
+    - creature-auditor-api
+---
+# Creature DSL - Domain Specific Language
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creature-dsl
+  description: DSL parser and compiler for custom compliance rules
+  tags:
+    - python
+    - dsl
+    - parser
+  annotations:
+    backstage.io/techdocs-ref: dir:./packages/creature-dsl
+spec:
+  type: library
+  lifecycle: experimental
+  owner: platform-team
+  system: creaturegrc
+  subcomponentOf: creaturegrc-core
+  dependsOn:
+    - component:creature-ir
+---
+# CreatureGRC Database
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creaturegrc-database
+  description: PostgreSQL database with compliance data schemas
+  tags:
+    - postgresql
+    - database
+    - migrations
+spec:
+  type: database
+  lifecycle: production
+  owner: platform-team
+  system: creaturegrc
+  dependsOn:
+    - resource:postgres-16
+---
+# Plugin: Netbox Scanner
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creature-plugin-netbox
+  description: Netbox integration for infrastructure inventory sync
+  tags:
+    - plugin
+    - scanner
+    - netbox
+spec:
+  type: library
+  lifecycle: production
+  owner: platform-team
+  system: creaturegrc
+  dependsOn:
+    - component:creature-core
+    - component:creature-ir
+  consumesApis:
+    - netbox-rest-api
+---
+# Plugin: Wazuh Scanner
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creature-plugin-wazuh
+  description: Wazuh SIEM integration for security evidence collection
+  tags:
+    - plugin
+    - scanner
+    - wazuh
+    - siem
+spec:
+  type: library
+  lifecycle: production
+  owner: security-team
+  system: creaturegrc
+  dependsOn:
+    - component:creature-core
+    - component:creature-ir
+  consumesApis:
+    - wazuh-rest-api
+---
+# Plugin: Keycloak Scanner
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creature-plugin-keycloak
+  description: Keycloak SSO integration for identity and access management
+  tags:
+    - plugin
+    - scanner
+    - keycloak
+    - sso
+    - iam
+spec:
+  type: library
+  lifecycle: production
+  owner: platform-team
+  system: creaturegrc
+  dependsOn:
+    - component:creature-core
+    - component:creature-ir
+  consumesApis:
+    - keycloak-admin-api
+---
+# Framework Data: NIST 800-53
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creature-data-nist
+  description: NIST 800-53 Rev 5 security control framework data
+  tags:
+    - data
+    - framework
+    - nist
+spec:
+  type: library
+  lifecycle: production
+  owner: security-team
+  system: creaturegrc
+  dependsOn:
+    - component:creature-ir
+---
+# Framework Data: SOC 2
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: creature-data-soc2
+  description: SOC 2 Trust Services Criteria framework data
+  tags:
+    - data
+    - framework
+    - soc2
+spec:
+  type: library
+  lifecycle: production
+  owner: security-team
+  system: creaturegrc
+  dependsOn:
+    - component:creature-ir
+---
+# REST API Definition
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: creaturegrc-rest-api
+  description: CreatureGRC REST API for agent-server communication
+  tags:
+    - rest
+    - api
+    - openapi
+spec:
+  type: openapi
+  lifecycle: production
+  owner: platform-team
+  system: creaturegrc
+  definition:
+    $text: ./docs/api/openapi.yaml
+---
+# CLI API Definition
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: creaturegrc-cli-api
+  description: CreatureGRC CLI commands and arguments
+  tags:
+    - cli
+    - commands
+spec:
+  type: other
+  lifecycle: production
+  owner: platform-team
+  system: creaturegrc
+  definition:
+    $text: ./docs/commands.md
+---
+# Creature IR Model API
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: creature-ir-api
+  description: Pydantic models for Creature, Control, Evidence, and AuditPackage
+  tags:
+    - pydantic
+    - models
+    - contract
+spec:
+  type: other
+  lifecycle: production
+  owner: platform-team
+  system: creaturegrc
+  definition:
+    $text: ./packages/creature-ir/src/creature_ir/models.py

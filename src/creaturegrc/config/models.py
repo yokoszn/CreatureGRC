@@ -167,10 +167,12 @@ class CreatureGRCConfig(BaseSettings):
     """
     Main CreatureGRC configuration.
 
-    Loads from:
-    1. Environment variables (CREATUREGRC_*)
+    Loads with correct precedence:
+    1. Environment variables (CREATUREGRC_*) - HIGHEST PRIORITY
     2. Config file (TOML)
-    3. Defaults
+    3. Defaults - LOWEST PRIORITY
+
+    Environment variables always override file settings to support containers and CI.
     """
 
     model_config = SettingsConfigDict(
@@ -180,6 +182,33 @@ class CreatureGRCConfig(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        """
+        Customize settings sources to ensure correct precedence.
+
+        Order (highest to lowest priority):
+        1. env_settings - Environment variables (CREATUREGRC_*)
+        2. dotenv_settings - .env file
+        3. init_settings - File config passed to constructor
+        4. Defaults
+
+        This ensures environment variables can override file settings.
+        """
+        return (
+            env_settings,
+            dotenv_settings,
+            init_settings,
+            file_secret_settings,
+        )
 
     # Profile settings
     profile: ProfileConfig = Field(
